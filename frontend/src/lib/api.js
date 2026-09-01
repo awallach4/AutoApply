@@ -1,9 +1,9 @@
 async function request(path, options = {}) {
-  const response = await fetch(path, options)
-  const contentType = response.headers.get("content-type") || ""
+  const response = await fetch(path, options);
+  const contentType = response.headers.get("content-type") || "";
   const payload = contentType.includes("application/json")
     ? await response.json()
-    : await response.text()
+    : await response.text();
 
   if (!response.ok) {
     // FastAPI returns ``detail`` for HTTPException; some endpoints
@@ -13,38 +13,43 @@ async function request(path, options = {}) {
     // "[object Object]" and hide the actual reason. Pick a string for
     // ``message`` but attach the parsed body so callers that care
     // about the structured shape can read it.
-    const detail = typeof payload === "object" && payload !== null ? payload.detail : null
-    let message
+    const detail =
+      typeof payload === "object" && payload !== null ? payload.detail : null;
+    let message;
     if (typeof detail === "string") {
-      message = detail
+      message = detail;
     } else if (detail && typeof detail === "object") {
       // Prefer human-readable fields when present.
-      message = detail.message || detail.error || JSON.stringify(detail)
-    } else if (typeof payload === "object" && payload !== null && payload.message) {
-      message = payload.message
+      message = detail.message || detail.error || JSON.stringify(detail);
+    } else if (
+      typeof payload === "object" &&
+      payload !== null &&
+      payload.message
+    ) {
+      message = payload.message;
     } else if (typeof payload === "string" && payload) {
-      message = payload
+      message = payload;
     } else {
-      message = response.statusText || "Request failed"
+      message = response.statusText || "Request failed";
     }
-    const err = new Error(message)
-    err.status = response.status
-    err.body = payload
-    throw err
+    const err = new Error(message);
+    err.status = response.status;
+    err.body = payload;
+    throw err;
   }
 
-  return payload
+  return payload;
 }
 
 function toQuery(params) {
-  const search = new URLSearchParams()
+  const search = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
     if (value !== "" && value !== null && value !== undefined) {
-      search.set(key, String(value))
+      search.set(key, String(value));
     }
-  })
-  const query = search.toString()
-  return query ? `?${query}` : ""
+  });
+  const query = search.toString();
+  return query ? `?${query}` : "";
 }
 
 function _materialEnvelopeFromTaskRow(row, materialType, extras = {}) {
@@ -60,31 +65,35 @@ function _materialEnvelopeFromTaskRow(row, materialType, extras = {}) {
   // misleading ``{ok: true, artifact: null}``. We now treat any
   // task whose body-level status is not "ok"/"partial-with-data" as
   // a failure, regardless of the row's Celery-level status.
-  const result = row?.result || {}
-  const artifacts = result.artifacts || {}
+  const result = row?.result || {};
+  const artifacts = result.artifacts || {};
   const docKey = materialType.startsWith("cover_letter")
     ? "cover_letter"
-    : "resume"
+    : "resume";
   const documentArtifact =
     artifacts[materialType] ||
     artifacts[docKey] ||
     artifacts[`${docKey}_docx`] ||
-    null
-  const errors = result.errors || []
-  const bodyStatus = result.status || null
-  const noArtifacts = Object.keys(artifacts).length === 0
-  const rowFailed = row.status !== "succeeded"
+    null;
+  const errors = result.errors || [];
+  const bodyStatus = result.status || null;
+  const noArtifacts = Object.keys(artifacts).length === 0;
+  const rowFailed = row.status !== "succeeded";
   const bodyFailed =
-    bodyStatus && bodyStatus !== "ok" && (bodyStatus !== "partial" || noArtifacts)
+    bodyStatus &&
+    bodyStatus !== "ok" &&
+    (bodyStatus !== "partial" || noArtifacts);
   if (rowFailed || bodyFailed || (errors.length > 0 && !documentArtifact)) {
     const err = new Error(
       errors.length
         ? errors.map((e) => e.error).join("; ")
-        : result.detail || row.last_error || `Task failed: ${bodyStatus || row.status}`,
-    )
-    err.row = row
-    err.errors = errors
-    throw err
+        : result.detail ||
+            row.last_error ||
+            `Task failed: ${bodyStatus || row.status}`
+    );
+    err.row = row;
+    err.errors = errors;
+    throw err;
   }
   return {
     ok: true,
@@ -92,25 +101,24 @@ function _materialEnvelopeFromTaskRow(row, materialType, extras = {}) {
     material_type: materialType,
     artifact: documentArtifact || null,
     artifacts: Object.fromEntries(
-      Object.entries(artifacts).map(([k, v]) => [k, v?.path || v]),
+      Object.entries(artifacts).map(([k, v]) => [k, v?.path || v])
     ),
-    document: result.document || null,
-    validation: result.validation || null,
-    template: result.template || null,
-    requirements: result.requirements || null,
-    version: result.version || null,
-    strategy: documentArtifact?.strategy ?? result.strategy ?? null,
-    strategy_source: result.strategy_source ?? null,
-    strategy_notes:
-      documentArtifact?.strategy_notes ?? result.strategy_notes ?? [],
-    source_document_id: result.source_document_id ?? null,
-    patch_aggressiveness: result.patch_aggressiveness ?? null,
+    document: documentArtifact?.document || null,
+    validation: documentArtifact?.validation || null,
+    template: documentArtifact?.template || null,
+    requirements: documentArtifact?.requirements || null,
+    version: documentArtifact?.version || null,
+    strategy: documentArtifact?.strategy ?? null,
+    strategy_source: documentArtifact?.strategy_source ?? null,
+    strategy_notes: documentArtifact?.strategy_notes ?? [],
+    source_document_id: documentArtifact?.source_document_id ?? null,
+    patch_aggressiveness: documentArtifact?.patch_aggressiveness ?? null,
     patch_allow_reorder_sections:
-      result.patch_allow_reorder_sections ?? null,
+      documentArtifact?.patch_allow_reorder_sections ?? null,
     patch_allow_add_remove_bullets:
-      result.patch_allow_add_remove_bullets ?? null,
-    ...extras,
-  }
+      documentArtifact?.patch_allow_add_remove_bullets ?? null,
+    ...extras
+  };
 }
 
 export const api = {
@@ -119,14 +127,14 @@ export const api = {
   // /api/schedule). Keep the named methods below for everything that
   // needs param encoding / structured payloads.
   get(path) {
-    return request(path)
+    return request(path);
   },
   post(path, body = {}) {
     return request(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    })
+      body: JSON.stringify(body)
+    });
   },
   // Phase 18.2 async-task helpers ----------------------------------
   // Long-running routes (generate-material, regenerate-material)
@@ -134,7 +142,7 @@ export const api = {
   // for the structured ``result`` payload without writing their own
   // setInterval loop.
   getTask(taskId) {
-    return request(`/api/tasks/${encodeURIComponent(taskId)}`)
+    return request(`/api/tasks/${encodeURIComponent(taskId)}`);
   },
   /**
    * Poll ``/api/tasks/{taskId}`` until the row reaches a terminal
@@ -148,138 +156,149 @@ export const api = {
    */
   async pollTask(
     taskId,
-    {
-      intervalMs = 1500,
-      timeoutMs = 15 * 60 * 1000,
-      onTick = null,
-    } = {},
+    { intervalMs = 1500, timeoutMs = 15 * 60 * 1000, onTick = null } = {}
   ) {
     const terminal = new Set([
       "succeeded",
       "failed",
       "cancelled",
       "dead_lettered",
-      "waiting_human",
-    ])
-    const deadline = Date.now() + timeoutMs
-    let row = await api.getTask(taskId)
-    if (onTick) onTick(row)
+      "waiting_human"
+    ]);
+    const deadline = Date.now() + timeoutMs;
+    let row = await api.getTask(taskId);
+    if (onTick) onTick(row);
     while (!terminal.has(row.status)) {
       if (Date.now() > deadline) {
-        const err = new Error(`pollTask timed out after ${timeoutMs}ms`)
-        err.row = row
-        throw err
+        const err = new Error(`pollTask timed out after ${timeoutMs}ms`);
+        err.row = row;
+        throw err;
       }
-      await new Promise((resolve) => setTimeout(resolve, intervalMs))
-      row = await api.getTask(taskId)
-      if (onTick) onTick(row)
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      row = await api.getTask(taskId);
+      if (onTick) onTick(row);
     }
-    return row
+    return row;
   },
   dashboard() {
-    return request("/api/dashboard")
+    return request("/api/dashboard");
   },
   searchJobs(payload) {
     return request("/api/jobs/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
+      body: JSON.stringify(payload)
+    });
   },
   filterProfiles() {
-    return request("/api/jobs/filter-profiles")
+    return request("/api/jobs/filter-profiles");
   },
   jobIndexFreshness(payload) {
     return request("/api/jobs/index/freshness", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
+      body: JSON.stringify(payload)
+    });
   },
   jobIndexRefresh(payload) {
     return request("/api/jobs/index/refresh", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
+      body: JSON.stringify(payload)
+    });
   },
   saveFilterProfile(profileId, payload) {
-    return request(`/api/jobs/filter-profiles/${encodeURIComponent(profileId)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
+    return request(
+      `/api/jobs/filter-profiles/${encodeURIComponent(profileId)}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }
+    );
   },
   deleteFilterProfile(profileId) {
-    return request(`/api/jobs/filter-profiles/${encodeURIComponent(profileId)}`, {
-      method: "DELETE",
-    })
+    return request(
+      `/api/jobs/filter-profiles/${encodeURIComponent(profileId)}`,
+      {
+        method: "DELETE"
+      }
+    );
   },
   linkedinSession({ forceRefresh = false } = {}) {
     // Default path is cache-served on the backend (5-min TTL) so opening the
     // UI doesn't spin up a headless Chromium every time. Pass forceRefresh to
     // run a real probe — e.g. from an explicit "Check status" click.
-    const suffix = forceRefresh ? "?refresh=true" : ""
-    return request(`/api/jobs/linkedin/session${suffix}`)
+    const suffix = forceRefresh ? "?refresh=true" : "";
+    return request(`/api/jobs/linkedin/session${suffix}`);
   },
   connectLinkedIn() {
     return request("/api/jobs/linkedin/session/connect", {
-      method: "POST",
-    })
+      method: "POST"
+    });
   },
   clearLinkedInSession() {
     return request("/api/jobs/linkedin/session", {
-      method: "DELETE",
-    })
+      method: "DELETE"
+    });
   },
   manualApplyTarget(url) {
     return request("/api/jobs/manual-apply-target", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
-    })
+      body: JSON.stringify({ url })
+    });
   },
   applyJob(url) {
     return request("/api/jobs/apply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
-    })
+      body: JSON.stringify({ url })
+    });
   },
   templates() {
-    return request("/api/templates")
+    return request("/api/templates");
   },
   documents(documentType = "") {
-    const suffix = documentType ? `?document_type=${encodeURIComponent(documentType)}` : ""
-    return request(`/api/documents${suffix}`)
+    const suffix = documentType
+      ? `?document_type=${encodeURIComponent(documentType)}`
+      : "";
+    return request(`/api/documents${suffix}`);
   },
   uploadDocument(documentType, file, { displayName = "", notes = "" } = {}) {
-    const form = new FormData()
-    form.append("document", file)
-    form.append("document_type", documentType)
-    if (displayName) form.append("display_name", displayName)
-    if (notes) form.append("notes", notes)
-    return request("/api/documents/upload", { method: "POST", body: form })
+    const form = new FormData();
+    form.append("document", file);
+    form.append("document_type", documentType);
+    if (displayName) form.append("display_name", displayName);
+    if (notes) form.append("notes", notes);
+    return request("/api/documents/upload", { method: "POST", body: form });
   },
   updateDocument(documentId, { displayName, notes } = {}) {
-    const body = {}
-    if (displayName !== undefined) body.display_name = displayName
-    if (notes !== undefined) body.notes = notes
+    const body = {};
+    if (displayName !== undefined) body.display_name = displayName;
+    if (notes !== undefined) body.notes = notes;
     return request(`/api/documents/${encodeURIComponent(documentId)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    })
+      body: JSON.stringify(body)
+    });
   },
   deleteDocument(documentId) {
     return request(`/api/documents/${encodeURIComponent(documentId)}`, {
-      method: "DELETE",
-    })
+      method: "DELETE"
+    });
   },
   documentDownloadUrl(documentId) {
-    return `/api/documents/${encodeURIComponent(documentId)}/download`
+    return `/api/documents/${encodeURIComponent(documentId)}/download`;
   },
-  promoteArtifactToLibrary({ artifactPath, documentType, displayName, applicationId = "", jobSnapshotId = "", notes = "" } = {}) {
+  promoteArtifactToLibrary({
+    artifactPath,
+    documentType,
+    displayName,
+    applicationId = "",
+    jobSnapshotId = "",
+    notes = ""
+  } = {}) {
     return request("/api/documents/promote", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -289,11 +308,16 @@ export const api = {
         display_name: displayName,
         application_id: applicationId || null,
         job_snapshot_id: jobSnapshotId || null,
-        notes: notes || null,
-      }),
-    })
+        notes: notes || null
+      })
+    });
   },
-  createProfileFromLibrary({ documentId, profileId = "", overwrite = false, setActive = true } = {}) {
+  createProfileFromLibrary({
+    documentId,
+    profileId = "",
+    overwrite = false,
+    setActive = true
+  } = {}) {
     return request("/api/profile/from-library", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -301,31 +325,31 @@ export const api = {
         document_id: documentId,
         profile_id: profileId || null,
         overwrite,
-        set_active: setActive,
-      }),
-    })
+        set_active: setActive
+      })
+    });
   },
   materialDefaults() {
-    return request("/api/settings/material-defaults")
+    return request("/api/settings/material-defaults");
   },
   updateMaterialDefaults(payload) {
     return request("/api/settings/material-defaults", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
+      body: JSON.stringify(payload)
+    });
   },
   uploadTemplate(documentType, file, templateName = "") {
-    const form = new FormData()
-    form.append("document_type", documentType)
-    form.append("template", file)
+    const form = new FormData();
+    form.append("document_type", documentType);
+    form.append("template", file);
     if (templateName) {
-      form.append("template_name", templateName)
+      form.append("template_name", templateName);
     }
     return request("/api/templates/upload", {
       method: "POST",
-      body: form,
-    })
+      body: form
+    });
   },
   createLatexTemplate(documentType, templateName = "", description = "") {
     return request("/api/templates/latex", {
@@ -334,36 +358,50 @@ export const api = {
       body: JSON.stringify({
         document_type: documentType,
         template_name: templateName,
-        description,
-      }),
-    })
+        description
+      })
+    });
   },
   templateDetail(documentType, templateId) {
-    return request(`/api/templates/${encodeURIComponent(documentType)}/${encodeURIComponent(templateId)}`)
+    return request(
+      `/api/templates/${encodeURIComponent(documentType)}/${encodeURIComponent(templateId)}`
+    );
   },
   updateTemplate(documentType, templateId, payload) {
-    return request(`/api/templates/${encodeURIComponent(documentType)}/${encodeURIComponent(templateId)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
+    return request(
+      `/api/templates/${encodeURIComponent(documentType)}/${encodeURIComponent(templateId)}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }
+    );
   },
   updateTemplateStyles(documentType, templateId, payload) {
-    return request(`/api/templates/${encodeURIComponent(documentType)}/${encodeURIComponent(templateId)}/styles`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
+    return request(
+      `/api/templates/${encodeURIComponent(documentType)}/${encodeURIComponent(templateId)}/styles`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }
+    );
   },
   validateTemplate(documentType, templateId) {
-    return request(`/api/templates/${encodeURIComponent(documentType)}/${encodeURIComponent(templateId)}/validate`, {
-      method: "POST",
-    })
+    return request(
+      `/api/templates/${encodeURIComponent(documentType)}/${encodeURIComponent(templateId)}/validate`,
+      {
+        method: "POST"
+      }
+    );
   },
   deleteTemplate(documentType, templateId) {
-    return request(`/api/templates/${encodeURIComponent(documentType)}/${encodeURIComponent(templateId)}`, {
-      method: "DELETE",
-    })
+    return request(
+      `/api/templates/${encodeURIComponent(documentType)}/${encodeURIComponent(templateId)}`,
+      {
+        method: "DELETE"
+      }
+    );
   },
   /**
    * Phase 18.2: defaults to enqueue + poll for the produced
@@ -382,7 +420,7 @@ export const api = {
     materialType,
     templateId = "",
     profileId = "",
-    options = {},
+    options = {}
   ) {
     const {
       strategy = null,
@@ -393,8 +431,8 @@ export const api = {
       onProgress = null,
       pollIntervalMs = 1500,
       pollTimeoutMs,
-      sync = false,
-    } = options
+      sync = false
+    } = options;
     const queued = await request("/api/jobs/generate-material", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -407,47 +445,47 @@ export const api = {
         source_document_id: sourceDocumentId,
         patch_aggressiveness: patchAggressiveness,
         patch_allow_reorder_sections: patchAllowReorderSections,
-        patch_allow_add_remove_bullets: patchAllowAddRemoveBullets,
-      }),
-    })
+        patch_allow_add_remove_bullets: patchAllowAddRemoveBullets
+      })
+    });
     if (sync || queued.status !== "queued") {
       // Either AUTOAPPLY_SYNC_MATERIALS=1 brought back the
       // synchronous path or the caller opted out of polling.
-      return queued
+      return queued;
     }
     const row = await api.pollTask(queued.task_id, {
       intervalMs: pollIntervalMs,
       timeoutMs: pollTimeoutMs,
-      onTick: onProgress,
-    })
-    return _materialEnvelopeFromTaskRow(row, materialType)
+      onTick: onProgress
+    });
+    return _materialEnvelopeFromTaskRow(row, materialType);
   },
   artifactDownloadUrl(path) {
-    return `/api/artifacts/download?path=${encodeURIComponent(path)}`
+    return `/api/artifacts/download?path=${encodeURIComponent(path)}`;
   },
   applications(filters) {
-    return request(`/api/applications${toQuery(filters)}`)
+    return request(`/api/applications${toQuery(filters)}`);
   },
   updateOutcome(applicationId, outcome) {
     return request(`/api/applications/${applicationId}/outcome`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ outcome }),
-    })
+      body: JSON.stringify({ outcome })
+    });
   },
   submitApplication(applicationId) {
     return request(`/api/applications/${applicationId}/submit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    })
+      body: JSON.stringify({})
+    });
   },
   discardApplication(applicationId, reason = "") {
     return request(`/api/applications/${applicationId}/discard`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reason: reason || null }),
-    })
+      body: JSON.stringify({ reason: reason || null })
+    });
   },
   /**
    * Delete an application from the tracker.
@@ -459,10 +497,10 @@ export const api = {
    * audit history survives until the cleanup task purges it.
    */
   deleteApplication(applicationId, { cascade = true } = {}) {
-    const query = cascade ? "?cascade=true" : ""
+    const query = cascade ? "?cascade=true" : "";
     return request(`/api/applications/${applicationId}${query}`, {
-      method: "DELETE",
-    })
+      method: "DELETE"
+    });
   },
   /**
    * Phase 18.2 mirror of :func:`generateJobMaterial`: enqueue +
@@ -483,8 +521,8 @@ export const api = {
       onProgress = null,
       pollIntervalMs = 1500,
       pollTimeoutMs,
-      sync = false,
-    } = {},
+      sync = false
+    } = {}
   ) {
     const queued = await request(
       `/api/applications/${applicationId}/regenerate-material`,
@@ -498,215 +536,221 @@ export const api = {
           source_document_id: sourceDocumentId,
           patch_aggressiveness: patchAggressiveness,
           patch_allow_reorder_sections: patchAllowReorderSections,
-          patch_allow_add_remove_bullets: patchAllowAddRemoveBullets,
-        }),
-      },
-    )
+          patch_allow_add_remove_bullets: patchAllowAddRemoveBullets
+        })
+      }
+    );
     if (sync || queued.status !== "queued") {
-      return queued
+      return queued;
     }
     const row = await api.pollTask(queued.task_id, {
       intervalMs: pollIntervalMs,
       timeoutMs: pollTimeoutMs,
-      onTick: onProgress,
-    })
+      onTick: onProgress
+    });
     return _materialEnvelopeFromTaskRow(row, materialType, {
-      applicationId,
-    })
+      applicationId
+    });
   },
   profile(profileId = "") {
-    const suffix = profileId ? `?profile_id=${encodeURIComponent(profileId)}` : ""
-    return request(`/api/profile${suffix}`)
+    const suffix = profileId
+      ? `?profile_id=${encodeURIComponent(profileId)}`
+      : "";
+    return request(`/api/profile${suffix}`);
   },
   createProfile(profileId, setActive = true) {
     return request("/api/profile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ profile_id: profileId, set_active: setActive }),
-    })
+      body: JSON.stringify({ profile_id: profileId, set_active: setActive })
+    });
   },
   saveProfile(profileId, profile, setActive = false) {
     return request(`/api/profile/${profileId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ profile_id: profileId, profile, set_active: setActive }),
-    })
+      body: JSON.stringify({
+        profile_id: profileId,
+        profile,
+        set_active: setActive
+      })
+    });
   },
   deleteProfile(profileId) {
     return request(`/api/profile/${profileId}`, {
-      method: "DELETE",
-    })
+      method: "DELETE"
+    });
   },
   renameProfile(profileId, newProfileId) {
     return request(`/api/profile/${profileId}/rename`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ new_profile_id: newProfileId }),
-    })
+      body: JSON.stringify({ new_profile_id: newProfileId })
+    });
   },
   activateProfile(profileId) {
     return request(`/api/profile/${profileId}/activate`, {
-      method: "POST",
-    })
+      method: "POST"
+    });
   },
   uploadResume(file, options = {}) {
-    const form = new FormData()
-    form.append("resume", file)
+    const form = new FormData();
+    form.append("resume", file);
     if (options.profileId) {
-      form.append("profile_id", options.profileId)
+      form.append("profile_id", options.profileId);
     }
-    form.append("overwrite", String(Boolean(options.overwrite)))
-    form.append("set_active", String(options.setActive !== false))
+    form.append("overwrite", String(Boolean(options.overwrite)));
+    form.append("set_active", String(options.setActive !== false));
     return request("/api/profile/upload-resume", {
       method: "POST",
-      body: form,
-    })
+      body: form
+    });
   },
   settings() {
-    return request("/api/settings/llm")
+    return request("/api/settings/llm");
   },
   updateSettings(payload) {
     return request("/api/settings/llm", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
+      body: JSON.stringify(payload)
+    });
   },
   clearSearchCache() {
     return request("/api/settings/search-cache", {
-      method: "DELETE",
-    })
+      method: "DELETE"
+    });
   },
   providers() {
-    return request("/api/providers")
+    return request("/api/providers");
   },
   providerModels(providerId) {
-    return request(
-      `/api/providers/${encodeURIComponent(providerId)}/models`,
-    )
+    return request(`/api/providers/${encodeURIComponent(providerId)}/models`);
   },
   setProviderModel(providerId, model) {
-    return request(
-      `/api/providers/${encodeURIComponent(providerId)}/model`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: model || null }),
-      },
-    )
+    return request(`/api/providers/${encodeURIComponent(providerId)}/model`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: model || null })
+    });
   },
   providersHealth() {
-    return request("/api/providers/health")
+    return request("/api/providers/health");
   },
   refreshProvidersHealth() {
-    return request("/api/providers/health/refresh", { method: "POST" })
+    return request("/api/providers/health/refresh", { method: "POST" });
   },
   testProvider(providerId) {
     return request(`/api/providers/${encodeURIComponent(providerId)}/test`, {
-      method: "POST",
-    })
+      method: "POST"
+    });
   },
   connectApiKeyProvider(providerId, payload) {
     return request(`/api/providers/${encodeURIComponent(providerId)}/set-key`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
+      body: JSON.stringify(payload)
+    });
   },
   disconnectProvider(providerId) {
     return request(`/api/providers/${encodeURIComponent(providerId)}`, {
-      method: "DELETE",
-    })
+      method: "DELETE"
+    });
   },
   useProvider(providerId, fallbackProvider = null) {
     return request(`/api/providers/${encodeURIComponent(providerId)}/use`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fallback_provider: fallbackProvider }),
-    })
+      body: JSON.stringify({ fallback_provider: fallbackProvider })
+    });
   },
   cacheSnapshot() {
     // Phase 12.6 inspector. Server-side SCAN can take a moment under
     // a large keyspace, so callers should drive a loading state.
-    return request("/api/cache")
+    return request("/api/cache");
   },
   costTrend(bucket = "day", periods = 14) {
     // Phase 17 dashboard card -- aggregated LLM spend per day/week.
     return request(
-      `/api/agent/costs/trend?bucket=${encodeURIComponent(bucket)}&periods=${encodeURIComponent(periods)}`,
-    )
+      `/api/agent/costs/trend?bucket=${encodeURIComponent(bucket)}&periods=${encodeURIComponent(periods)}`
+    );
   },
   recentTraces(limit = 20) {
-    return request(`/api/agent/traces?limit=${encodeURIComponent(limit)}`)
+    return request(`/api/agent/traces?limit=${encodeURIComponent(limit)}`);
   },
   automationPlans() {
-    return request("/api/automation-plans")
+    return request("/api/automation-plans");
   },
   automationPlanRuns(params = {}) {
-    const query = new URLSearchParams()
-    if (params.limit) query.set("limit", String(params.limit))
-    if (params.status) query.set("status", params.status)
-    const suffix = query.toString() ? `?${query.toString()}` : ""
-    return request(`/api/automation-plans/runs${suffix}`)
+    const query = new URLSearchParams();
+    if (params.limit) query.set("limit", String(params.limit));
+    if (params.status) query.set("status", params.status);
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    return request(`/api/automation-plans/runs${suffix}`);
   },
   createAutomationPlan(payload) {
     return request("/api/automation-plans", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
+      body: JSON.stringify(payload)
+    });
   },
   updateAutomationPlan(planId, payload) {
     return request(`/api/automation-plans/${encodeURIComponent(planId)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
+      body: JSON.stringify(payload)
+    });
   },
   deleteAutomationPlan(planId) {
     return request(`/api/automation-plans/${encodeURIComponent(planId)}`, {
-      method: "DELETE",
-    })
+      method: "DELETE"
+    });
   },
   runAutomationPlan(planId) {
-    return request(`/api/automation-plans/${encodeURIComponent(planId)}/run-now`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    })
+    return request(
+      `/api/automation-plans/${encodeURIComponent(planId)}/run-now`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      }
+    );
   },
   morningDigest(windowHours = 24) {
     // Phase 17.6: dashboard banner payload.
-    return request(`/api/digest?window_hours=${encodeURIComponent(windowHours)}`)
+    return request(
+      `/api/digest?window_hours=${encodeURIComponent(windowHours)}`
+    );
   },
   // Phase 17.3 + 17.4: review queue.
   reviewList(status = null) {
-    const suffix = status ? `?status=${encodeURIComponent(status)}` : ""
-    return request(`/api/review${suffix}`)
+    const suffix = status ? `?status=${encodeURIComponent(status)}` : "";
+    return request(`/api/review${suffix}`);
   },
   reviewDetail(entryId) {
-    return request(`/api/review/${encodeURIComponent(entryId)}`)
+    return request(`/api/review/${encodeURIComponent(entryId)}`);
   },
   reviewApprove(entryId, payload = {}) {
     return request(`/api/review/${encodeURIComponent(entryId)}/approve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
+      body: JSON.stringify(payload)
+    });
   },
   reviewReject(entryId, payload = {}) {
     return request(`/api/review/${encodeURIComponent(entryId)}/reject`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
+      body: JSON.stringify(payload)
+    });
   },
   reviewRefresh(entryId, payload = {}) {
     return request(`/api/review/${encodeURIComponent(entryId)}/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
+      body: JSON.stringify(payload)
+    });
   },
   reviewSubmit(entryId, payload = {}) {
     // Phase 17.5: approve-and-submit via the pre-submit hard gate.
@@ -715,29 +759,29 @@ export const api = {
     return request(`/api/review/${encodeURIComponent(entryId)}/submit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
+      body: JSON.stringify(payload)
+    });
   },
   reviewBulkApprove(entryIds, payload = {}) {
     return request("/api/review/bulk/approve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entry_ids: entryIds, ...payload }),
-    })
+      body: JSON.stringify({ entry_ids: entryIds, ...payload })
+    });
   },
   reviewBulkReject(entryIds, payload = {}) {
     return request("/api/review/bulk/reject", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entry_ids: entryIds, ...payload }),
-    })
+      body: JSON.stringify({ entry_ids: entryIds, ...payload })
+    });
   },
   reviewBulkRejectByFilter(payload) {
     return request("/api/review/bulk/reject-by-filter", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
+      body: JSON.stringify(payload)
+    });
   },
   matchingExplain(job) {
     // Phase 16.3: "Why was this filtered?" explainability endpoint.
@@ -746,8 +790,8 @@ export const api = {
     return request("/api/matching/explain", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job }),
-    })
+      body: JSON.stringify({ job })
+    });
   },
   clearCacheNamespace(namespace) {
     // Mirrors `autoapply redis flush --namespace`: requires the
@@ -756,7 +800,7 @@ export const api = {
     return request(`/api/cache/${encodeURIComponent(namespace)}`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ confirm: true }),
-    })
-  },
-}
+      body: JSON.stringify({ confirm: true })
+    });
+  }
+};
