@@ -26,39 +26,24 @@
     "skill_line": "Resume.SkillLine"
   },
   "sections": {
-    "summary": {
-      "enabled": false,
-      "max_items": 1,
-      "max_bullets_per_item": null,
-      "max_words_per_bullet": null,
-      "max_lines": null
-    },
     "education": {
       "enabled": true,
-      "max_items": 2,
-      "max_bullets_per_item": null,
-      "max_words_per_bullet": null,
-      "max_lines": null
+      "max_items": 2
     },
     "experience": {
       "enabled": true,
       "max_items": 3,
       "max_bullets_per_item": 4,
-      "max_words_per_bullet": 24,
-      "max_lines": null
+      "max_words_per_bullet": 24
     },
     "projects": {
       "enabled": true,
       "max_items": 3,
       "max_bullets_per_item": 3,
-      "max_words_per_bullet": 22,
-      "max_lines": null
+      "max_words_per_bullet": 22
     },
     "skills": {
       "enabled": true,
-      "max_items": null,
-      "max_bullets_per_item": null,
-      "max_words_per_bullet": null,
       "max_lines": 4
     }
   },
@@ -80,10 +65,5 @@
   },
   "blocks": {
     "sections": "{{resume.sections}}"
-  },
-  "latex": null,
-  "style_overrides": {},
-  "target_pages": 1,
-  "filename_pattern": "company_role_date",
-  "filename_custom_label": ""
+  }
 }

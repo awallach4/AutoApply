@@ -25,6 +25,61 @@ from src.intake.schema import EmploymentType, RawJob, SeniorityLevel
 
 logger = logging.getLogger("autoapply.intake.filters")
 
+US_STATE_ABBREVIATIONS = {
+    "al": "alabama",
+    "ak": "alaska",
+    "az": "arizona",
+    "ar": "arkansas",
+    "ca": "california",
+    "co": "colorado",
+    "ct": "connecticut",
+    "de": "delaware",
+    "fl": "florida",
+    "ga": "georgia",
+    "hi": "hawaii",
+    "id": "idaho",
+    "il": "illinois",
+    "in": "indiana",
+    "ia": "iowa",
+    "ks": "kansas",
+    "ky": "kentucky",
+    "la": "louisiana",
+    "me": "maine",
+    "md": "maryland",
+    "ma": "massachusetts",
+    "mi": "michigan",
+    "mn": "minnesota",
+    "ms": "mississippi",
+    "mo": "missouri",
+    "mt": "montana",
+    "ne": "nebraska",
+    "nv": "nevada",
+    "nh": "new hampshire",
+    "nj": "new jersey",
+    "nm": "new mexico",
+    "ny": "new york",
+    "nc": "north carolina",
+    "nd": "north dakota",
+    "oh": "ohio",
+    "ok": "oklahoma",
+    "or": "oregon",
+    "pa": "pennsylvania",
+    "ri": "rhode island",
+    "sc": "south carolina",
+    "sd": "south dakota",
+    "tn": "tennessee",
+    "tx": "texas",
+    "ut": "utah",
+    "vt": "vermont",
+    "va": "virginia",
+    "wa": "washington",
+    "wv": "west virginia",
+    "wi": "wisconsin",
+    "wy": "wyoming",
+    "dc": "district of columbia",
+    "us": "united states",
+    "usa": "united states",
+}
 
 @dataclass
 class LocationRule:
@@ -108,6 +163,34 @@ class JobFilter:
             return True
         return job.seniority in self.seniority
 
+    def _location_matches_rule(self, location: str, rule_name: str) -> bool:
+        """Match a location against a rule, including U.S. state abbreviations.
+
+        State abbreviations are only treated as abbreviations when they appear
+        as a distinct token, so a rule for 'ma' does not accidentally match
+        words such as 'manufacturing'.
+        """
+        loc = location.lower()
+        rule = rule_name.lower().strip()
+
+        # Normal substring matching for cities, full state names, etc.
+        if rule in loc:
+            return True
+
+        # If the rule is a full U.S. state name, also recognize its abbreviation.
+        abbreviation = next(
+            (abbr for abbr, state in US_STATE_ABBREVIATIONS.items() if state == rule),
+            None,
+        )
+
+        if abbreviation:
+            # State abbreviations normally appear as their own token, often
+            # after a comma: "Boston, MA", "Denver, CO", etc.
+            if re.search(rf"(?<![a-z]){re.escape(abbreviation)}(?![a-z])", loc):
+                return True
+
+        return False
+
     def _check_location(self, job: RawJob) -> bool:
         if not self.locations:
             return True
@@ -130,7 +213,7 @@ class JobFilter:
                 continue
 
             # Substring match on location field
-            if name_lower in loc:
+            if self._location_matches_rule(loc, name_lower):
                 if not rule.work_modes or work_mode in rule.work_modes:
                     return True
 

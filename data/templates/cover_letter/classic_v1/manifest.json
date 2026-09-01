@@ -1,6 +1,12 @@
 {
   "template_id": "classic_v1",
   "document_type": "cover_letter",
+  "template_format": "docx",
+  "renderer": "docx",
+  "supported_outputs": [
+    "docx",
+    "pdf"
+  ],
   "name": "Classic Cover Letter",
   "description": "Simple one-page cover letter with editable Word styles.",
   "page": {

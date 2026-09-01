@@ -394,7 +394,7 @@ async def dashboard_data() -> dict:
 @router.post("/jobs/search")
 async def search_jobs(payload: JobSearchPayload) -> dict:
     return await search_jobs_usecase(
-        profile=payload.profile or None,
+        profile=payload.profile or ("default" if payload.source == "ats" else None),
         source=payload.source,
         ats=payload.ats or None,
         company=payload.company or None,

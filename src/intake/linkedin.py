@@ -60,7 +60,8 @@ DEFAULT_USER_AGENT = (
     "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 )
 
-# Persistent storage for cookies/session
+# Directory used for transient LinkedIn probe/cache data.
+# Authentication state itself is stored in linkedin_state.json
 DEFAULT_SESSION_DIR = PROJECT_ROOT / "data" / ".linkedin_session"
 
 # Probe-result cache. We don't want to spin up a headless Chromium every time
@@ -238,37 +239,61 @@ class LinkedInSession:
         await self.close()
 
     async def start(self) -> None:
-        """Launch browser with persistent context for cookie reuse."""
+        """Launch browser and load the imported LinkedIn authentication state."""
         self.session_dir.mkdir(parents=True, exist_ok=True)
+
+        state_file = PROJECT_ROOT / "data" / "linkedin_state.json"
 
         self._playwright = await async_playwright().start()
 
-        # Use persistent context -- cookies and localStorage are saved automatically
-        self._context = await self._playwright.chromium.launch_persistent_context(
-            user_data_dir=str(self.session_dir),
+        self._browser = await self._playwright.chromium.launch(
             headless=self.headless,
-            viewport={"width": 1280, "height": 900},
-            user_agent=DEFAULT_USER_AGENT,
             args=[
                 "--disable-blink-features=AutomationControlled",
             ],
-            java_script_enabled=True,
         )
 
-        logger.info("LinkedIn session started (session_dir=%s)", self.session_dir)
+        context_kwargs = {
+            "viewport": {"width": 1280, "height": 900},
+            "user_agent": DEFAULT_USER_AGENT,
+            "java_script_enabled": True,
+        }
+
+        if state_file.exists() and state_file.stat().st_size > 0:
+            context_kwargs["storage_state"] = str(state_file)
+            logger.info(
+                "Loading saved LinkedIn authentication state (%s)",
+                state_file,
+            )
+        else:
+            logger.info(
+                "No saved LinkedIn authentication state found; "
+                "starting with a fresh browser context"
+            )
+
+        self._context = await self._browser.new_context(**context_kwargs)
+
+        cookies = await self._context.cookies([LINKEDIN_BASE])
+        li_at = [c for c in cookies if c.get("name") == "li_at"]
+        logger.info(
+            "LinkedIn auth diagnostic: %d cookies loaded, li_at present=%s",
+            len(cookies),
+            bool(li_at),
+        )
+
+        logger.info(
+            "LinkedIn session started using imported authentication state (%s)",
+            state_file,
+        )
 
     async def close(self) -> None:
-        """Close browser and save session state.
-
-        Resilient against the underlying context/browser having already died
-        (e.g. LinkedIn anti-bot killed the headless page, or the persistent
-        profile crashed on launch). We always try to stop the playwright
-        driver so its background task does not leak as an unretrieved future
-        ("Connection closed while reading from the driver").
-        """
+        """Close browser and Playwright cleanly."""
         context = self._context
+        browser = self._browser
         playwright = self._playwright
+
         self._context = None
+        self._browser = None
         self._page = None
         self._playwright = None
 
@@ -277,11 +302,19 @@ class LinkedInSession:
                 await context.close()
             except Exception as exc:  # noqa: BLE001
                 logger.debug("LinkedIn context already closed: %s", exc)
+
+        if browser is not None:
+            try:
+                await browser.close()
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("LinkedIn browser already closed: %s", exc)
+
         if playwright is not None:
             try:
                 await playwright.stop()
             except Exception as exc:  # noqa: BLE001
                 logger.debug("LinkedIn playwright stop failed: %s", exc)
+
         logger.info("LinkedIn session closed")
 
     async def get_page(self) -> Page:
@@ -293,24 +326,49 @@ class LinkedInSession:
             return pages[0]
         return await self._context.new_page()
 
+    async def save_authentication_state(self) -> None:
+        """Persist the current browser authentication state to disk."""
+        if not self._context:
+            raise RuntimeError("Session not started")
+
+        state_file = PROJECT_ROOT / "data" / "linkedin_state.json"
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+
+        await self._context.storage_state(path=str(state_file))
+
+        logger.info(
+            "Saved LinkedIn authentication state to %s",
+            state_file
+        )
+
     def has_saved_session_data(self) -> bool:
-        """Return True when the persistent profile already contains browser state."""
-        if not self.session_dir.exists():
-            return False
-        ignored = {
-            "SingletonCookie",
-            "SingletonLock",
-            "SingletonSocket",
-            _PROBE_CACHE_FILENAME,
-        }
-        return any(entry.name not in ignored for entry in self.session_dir.iterdir())
+        """Return True when an imported LinkedIn authentication state exists."""
+        state_file = PROJECT_ROOT / "data" / "linkedin_state.json"
+        return state_file.exists() and state_file.stat().st_size > 0
 
     async def is_authenticated(self) -> bool:
         """Check whether the saved browser profile still has a valid LinkedIn session."""
         page = await self.get_page()
+        logger.info(
+            "LinkedIn auth diagnostic before check: url=%s cookies=%d li_at=%s",
+            page.url,
+            len(await self._context.cookies()),
+            await self._has_auth_cookie(),
+        )
         await page.goto(LINKEDIN_BASE, wait_until="domcontentloaded", timeout=30000)
+        logger.info(
+            "LinkedIn auth diagnostic after navigation: url=%s li_at=%s",
+            page.url,
+            await self._has_auth_cookie(),
+        )
         await page.wait_for_timeout(2000)
-        return await self._is_logged_in(page)
+        authenticated = await self._is_logged_in(page)
+        logger.info(
+            "LinkedIn auth diagnostic result: authenticated=%s url=%s",
+            authenticated,
+            page.url,
+        )
+        return authenticated
 
     async def ensure_logged_in(self, timeout_ms: int = 300000) -> bool:
         """Check if logged in; if not, navigate to login and wait for user.
@@ -349,6 +407,7 @@ class LinkedInSession:
             authenticated = await self._wait_for_authentication(timeout_ms=timeout_ms, page=page)
             if authenticated:
                 logger.info("LinkedIn login successful")
+                await self.save_authentication_state()
                 return True
         except Exception:
             logger.exception("LinkedIn login polling failed")
@@ -359,11 +418,23 @@ class LinkedInSession:
     async def _is_logged_in(self, page: Page) -> bool:
         """Check if the current page indicates a logged-in LinkedIn session."""
         try:
-            if await self._has_auth_cookie():
+            has_cookie = await self._has_auth_cookie()
+
+            logger.info(
+                "LinkedIn _is_logged_in: url=%s li_at=%s",
+                page.url,
+                has_cookie,
+            )
+            if has_cookie:
                 return True
 
             # Check for logged-in indicators
             indicator = await page.query_selector(SELECTORS["feed_indicator"])
+            logger.info(
+                "LinkedIn _is_logged_in: feed indicator=%s",
+                bool(indicator),
+            )
+
             if indicator:
                 return True
 
@@ -375,6 +446,7 @@ class LinkedInSession:
 
             return False
         except Exception:
+            logger.exception("LinkedIn _is_logged_in failed")
             return False
 
     async def _has_auth_cookie(self) -> bool:
@@ -598,7 +670,24 @@ class LinkedInScraper:
         page_state: dict[str, object] | None = None
 
         for attempt in range(1, max_attempts + 1):
-            response = await page.goto(page_url, wait_until="domcontentloaded", timeout=30000)
+            try:
+                response = await page.goto(
+                    page_url,
+                    wait_until="commit",
+                    timeout=60000,
+                )
+            except PlaywrightTimeoutError:
+                logger.warning(
+                    "LinkedIn navigation timed out; checking whether page is loaded enough to scrape"
+                )
+                response = None
+
+            await page.wait_for_timeout(10000)
+
+            logger.info("LinkedIn page URl after navigation: %s", page.url)
+            logger.info("LinkedIn page title: %s", await page.title())
+            logger.info("LinkedIn page HTML length: %d", len(await page.content()))
+
             await self._random_delay()
 
             jobs = []
@@ -930,8 +1019,11 @@ class LinkedInScraper:
         """Extract job information from search result cards on the page."""
         jobs: list[RawJob] = []
 
-        # Get all job card elements
-        cards = await page.query_selector_all(SELECTORS["job_card"])
+        # Use a Locator so Playwright resolves the current DOM rather than
+        # relying on element handles from a potentially replaced document.
+        cards = await page.locator(SELECTORS["job_card"]).all()
+
+        logger.info("LinkedIn found %d job card elements", len(cards))
 
         for card in cards:
             try:
@@ -946,8 +1038,8 @@ class LinkedInScraper:
     async def _parse_job_card(self, card) -> RawJob | None:
         """Parse a single job card element into a RawJob."""
         # Extract title
-        title_el = await card.query_selector(SELECTORS["job_title"])
-        if not title_el:
+        title_el = card.locator(SELECTORS["job_title"]).first
+        if await title_el.count() == 0:
             return None
         title = _normalize_linkedin_title_text(await title_el.inner_text())
         if not title:

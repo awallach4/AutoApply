@@ -1,0 +1,49 @@
+database:
+  host: localhost
+  port: 5432
+  name: autoapply
+  user: autoapply
+  password: 'raspberry'
+llm:
+  provider: openrouter
+  primary_provider: openrouter
+  fallback_provider: claude-cli
+  allow_fallback: true
+  timeout: 120
+  max_retries: 2
+  fallback_providers:
+  - claude-cli
+documents:
+  output_dir: data/output
+  template_dir: data/templates
+  naming_pattern: '{type}_{company}_{role}_{date}'
+logging:
+  level: INFO
+  file: logs/autoapply.log
+  format: '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+rate_limit:
+  min_delay: 3
+  max_delay: 8
+  cooldown_on_error: 60
+  max_applications_per_hour: 15
+search_cache:
+  enabled: true
+  ttl_hours: 24
+linkedin:
+  max_keyword_detail_fetches: 5000
+  max_redirect_detail_fetches: 5000
+cache:
+  l1_max_entries: 1024
+cleanup:
+  tmp_hours: 24
+  failed_artifact_hours: 48
+  output_retention_days: 30
+  soft_deleted_retention_days: 14
+  screenshot_keep_per_application: 5
+  quarantine_days: 7
+parallelism:
+  llm:
+    max_concurrent_global: 10
+  bullet_rewrites:
+    max_concurrent_per_task: 5
+  provider: {}

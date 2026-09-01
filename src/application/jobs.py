@@ -1499,7 +1499,7 @@ def _build_companies_filter(
     if ats and company:
         return {ats: [company]}
     if company:
-        return {"greenhouse": [company], "lever": [company]}
+        return {"greenhouse": [company], "lever": [company], "ashby": [company]}
     if ats:
         from src.intake.batch import load_company_list
 
@@ -1940,9 +1940,26 @@ def _score_jobs(jobs, *, warn_on_missing_profile: bool) -> tuple[bool, list[str]
     from src.matching.scorer import build_scoring_context
     from src.matching.scorer import score_jobs as score_ranked_jobs
     from src.memory.profile import load_profile_yaml
+    from src.intake.filters import load_filter_profiles
+    from src.matching.rules import load_applicant_context
 
     profile_data = load_profile_yaml(profile_path)
-    scoring_ctx = build_scoring_context(profile_data)
+
+    filters_path = PROJECT_ROOT / "config" / "filters.yaml"
+    filter_profiles = load_filter_profiles(filters_path)
+    active_filter = filter_profiles.get("default")
+
+    applicant_ctx = load_applicant_context(profile_data)
+
+    if active_filter is not None:
+        applicant_ctx.preferred_employment_types = [
+            str(t) for t in active_filter.employment_types
+        ]
+        applicant_ctx.citizenship = "US Citizen"
+        applicant_ctx.work_authorization = "US Citizen"
+        applicant_ctx.visa_sponsorship_needed = False
+
+    scoring_ctx = build_scoring_context(profile_data, applicant_ctx=applicant_ctx)
     ranked = score_ranked_jobs(jobs, scoring_ctx)
     score_by_id = {score.job_id: score for score in ranked}
 
@@ -3118,6 +3135,11 @@ def _fetch_job_from_ats(url: str, ats_type: str):
 
             with LeverScraper() as scraper:
                 return scraper.fetch_job(company_slug, job_id)
+        if ats_type == "ashby":
+            from src.intake.ashby import AshbyScraper
+
+            with AshbyScraper() as scraper:
+                return scraper.fetch_job(company_slug, job_id)
     except Exception as exc:
         logger.warning("Failed to fetch %s job details for %s: %s", ats_type, url, exc)
 
@@ -3139,6 +3161,8 @@ def _parse_ats_job_locator(url: str, ats_type: str) -> tuple[str, str] | None:
     if ats_type == "lever" and len(parts) >= 2:
         return parts[0], parts[1]
 
+    if ats_type == "ashby" and len(parts) >= 2:
+        return parts[0], parts[1]
     return None
 
 

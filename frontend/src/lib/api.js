@@ -94,8 +94,21 @@ function _materialEnvelopeFromTaskRow(row, materialType, extras = {}) {
     artifacts: Object.fromEntries(
       Object.entries(artifacts).map(([k, v]) => [k, v?.path || v]),
     ),
-    strategy: documentArtifact?.strategy ?? null,
-    strategy_notes: documentArtifact?.strategy_notes ?? [],
+    document: result.document || null,
+    validation: result.validation || null,
+    template: result.template || null,
+    requirements: result.requirements || null,
+    version: result.version || null,
+    strategy: documentArtifact?.strategy ?? result.strategy ?? null,
+    strategy_source: result.strategy_source ?? null,
+    strategy_notes:
+      documentArtifact?.strategy_notes ?? result.strategy_notes ?? [],
+    source_document_id: result.source_document_id ?? null,
+    patch_aggressiveness: result.patch_aggressiveness ?? null,
+    patch_allow_reorder_sections:
+      result.patch_allow_reorder_sections ?? null,
+    patch_allow_add_remove_bullets:
+      result.patch_allow_add_remove_bullets ?? null,
     ...extras,
   }
 }

@@ -28,6 +28,7 @@ from src.intake.filters import JobFilter
 from src.intake.greenhouse import GreenhouseScraper
 from src.intake.jd_parser import parse_requirements
 from src.intake.lever import LeverScraper
+from src.intake.ashby import AshbyScraper
 from src.intake.schema import RawJob
 from src.intake.storage import upsert_jobs
 
@@ -72,6 +73,7 @@ def run_intake(
     scraper_map = {
         "greenhouse": GreenhouseScraper,
         "lever": LeverScraper,
+        "ashby": AshbyScraper,
     }
 
     for ats, slugs in companies.items():

@@ -329,14 +329,24 @@ async def run_plan(
     disqualified = total_jobs_seen - len(qualified)
     borderline = _borderline_count(breakdowns)
 
-    # Top-N already sorted descending by score_jobs. ``top_n <= 0`` is
-    # an explicit "select none" -- codex P2 fix; the previous expression
-    # treated 0/negative as "no cap" which silently fanned out tasks
-    # for the entire qualified pool when the operator intended to
-    # enqueue nothing.
-    selected = qualified[:top_n] if top_n > 0 else []
+    # Remove jobs that have already been processed or are currently
+    # waiting for human review before applying the top-N cap. This makes
+    # top_n mean "up to N new jobs to process" rather than "the first N
+    # qualified jobs, some of which may already be pending."
+    eligible = _drop_unresolved_postings(selected=qualified)
+
     if skip_previously_applied:
-        selected = _drop_previously_applied(tenant_id=tenant_id, selected=selected)
+        eligible = _drop_previously_applied(
+            tenant_id=tenant_id,
+            selected=eligible,
+        )
+
+    eligible = _drop_already_pending_review(
+        tenant_id=tenant_id,
+        selected=eligible,
+    )
+
+    selected = eligible[:top_n] if top_n > 0 else []
 
     # ----- 3. Persist review-queue rows + enqueue (skipped on dry_run)
     #
@@ -675,6 +685,29 @@ def _resolve_and_patch_posting_ids(
         if snapshot_id is not None:
             bd.job_snapshot_id = str(snapshot_id)
 
+def _drop_unresolved_postings(
+    *,
+    selected: list[Any],
+) -> list[Any]:
+    """Remove breakdowns that were not resolved to a persistent posting."""
+    resolved: list[Any] = []
+
+    for breakdown in selected:
+        if (
+            getattr(breakdown, "job_id", None)
+            and getattr(breakdown, "job_snapshot_id", None)
+        ):
+            resolved.append(breakdown)
+        else:
+            logger.warning(
+                "plan_run: skipping unresolved job from review/enqueue: "
+                "job_id=%s company=%s title=%s",
+                getattr(breakdown, "job_id", None),
+                getattr(breakdown, "company", None),
+                getattr(breakdown, "title", None),
+            )
+
+    return resolved
 
 def _create_review_entries(
     *,
@@ -699,7 +732,8 @@ def _create_review_entries(
       * denormalised ``company`` / ``title`` so the kanban renders
         without joining ``jobs``
 
-    Returns the list of inserted entry ids (as strings).
+    Returns the review entry ids associated with the selected breakdowns.
+    Existing pending entries may be returned instead of inserting duplicates.
     """
     from src.application.review import CreateEntryArgs, create_entry  # noqa: PLC0415
     from src.core.database import get_session_factory  # noqa: PLC0415
@@ -708,7 +742,7 @@ def _create_review_entries(
         return []
 
     factory = get_session_factory()
-    inserted: list[str] = []
+    entry_ids: list[str] = []
     with factory() as session, session.begin():
         for breakdown in selected:
             try:
@@ -732,8 +766,8 @@ def _create_review_entries(
                     run_id=run_id,
                 ),
             )
-            inserted.append(str(entry.id))
-    return inserted
+            entry_ids.append(str(entry.id))
+    return entry_ids
 
 
 def _drop_previously_applied(*, tenant_id: str, selected: list[Any]) -> list[Any]:
@@ -773,6 +807,58 @@ def _drop_previously_applied(*, tenant_id: str, selected: list[Any]) -> list[Any
         )
     return [bd for job_id, bd in by_uuid.items() if job_id not in existing]
 
+def _drop_already_pending_review(
+    *,
+    tenant_id: str,
+    selected: list[Any],
+) -> list[Any]:
+    """Remove jobs that already have a pending review entry.
+
+    A scheduled plan run may encounter the same job repeatedly. Once a
+    job is waiting in the review queue, there is no reason to generate
+    another set of materials or prepare another application for it.
+    """
+    if not selected:
+        return []
+
+    import uuid as uuid_mod  # noqa: PLC0415
+
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from src.core.models import ReviewQueueEntry  # noqa: PLC0415
+    from src.core.database import get_session_factory  # noqa: PLC0415
+
+    job_ids: list[uuid_mod.UUID] = []
+    by_uuid: dict[uuid_mod.UUID, Any] = {}
+
+    for breakdown in selected:
+        try:
+            job_uuid = uuid_mod.UUID(str(getattr(breakdown, "job_id", "")))
+        except ValueError:
+            continue
+        job_ids.append(job_uuid)
+        by_uuid[job_uuid] = breakdown
+
+    if not job_ids:
+        return selected
+
+    factory = get_session_factory()
+    with factory() as session:
+        existing = set(
+            session.execute(
+                select(ReviewQueueEntry.job_id).where(
+                    ReviewQueueEntry.tenant_id == tenant_id,
+                    ReviewQueueEntry.job_id.in_(job_ids),
+                    ReviewQueueEntry.status == "pending",
+                )
+            ).scalars()
+        )
+
+    return [
+        bd
+        for job_id, bd in by_uuid.items()
+        if job_id not in existing
+    ]
 
 def _default_enqueue_fn(task_name: str, payload: dict[str, Any]) -> str:
     """Default wiring: hand off to the Phase 14 Celery app."""

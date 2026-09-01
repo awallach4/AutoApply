@@ -1,7 +1,7 @@
 """Batch search interface -- scrape + filter + return/persist matching jobs.
 
 This is the main entry point for finding relevant jobs. It combines:
-1. Scraping from configured ATS boards (Greenhouse, Lever)
+1. Scraping from configured ATS boards (Greenhouse, Lever, Ashby)
 2. LinkedIn job search (Playwright-based, authenticated)
 3. JD parsing for structured requirements
 4. Filter profiles to narrow results
@@ -26,6 +26,7 @@ from src.intake.batch import enrich_requirements, load_company_list
 from src.intake.filters import load_filter_profiles
 from src.intake.greenhouse import GreenhouseScraper
 from src.intake.lever import LeverScraper
+from src.intake.ashby import AshbyScraper
 from src.intake.schema import RawJob
 
 # Phase 13.8: the file-backed `src.intake.search_cache` module has been
@@ -93,6 +94,7 @@ def search_jobs(
     scraper_map = {
         "greenhouse": GreenhouseScraper,
         "lever": LeverScraper,
+        "ashby": AshbyScraper,
     }
 
     all_jobs: list[RawJob] = []
@@ -498,7 +500,7 @@ def main() -> None:
     parser.add_argument("--config-dir", default="config", help="Config directory")
     parser.add_argument("--no-parse", action="store_true", help="Skip JD parsing")
     parser.add_argument("--use-llm", action="store_true", help="Use LLM for JD parsing")
-    parser.add_argument("--ats", help="Only scrape this ATS (greenhouse/lever)")
+    parser.add_argument("--ats", help="Only scrape this ATS (greenhouse/lever/ashby)")
     parser.add_argument("--company", help="Only scrape this company slug")
     args = parser.parse_args()
 
@@ -513,7 +515,7 @@ def main() -> None:
         companies = {args.ats: [args.company]}
     elif args.company:
         # Try both ATS types
-        companies = {"greenhouse": [args.company], "lever": [args.company]}
+        companies = {"greenhouse": [args.company], "lever": [args.company], "ashby": [args.company]}
 
     jobs = search_jobs(
         profile=args.profile,
