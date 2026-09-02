@@ -36,7 +36,7 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
-_PARTIAL_INDEX_NAME = "ux_review_queue_pending_per_snapshot"
+_PARTIAL_INDEX_NAME = "ux_review_queue_pending_per_job"
 _OLD_CONSTRAINT = "uq_review_queue_pending_per_snapshot"
 
 
@@ -48,7 +48,7 @@ def upgrade() -> None:
     op.create_index(
         _PARTIAL_INDEX_NAME,
         "review_queue",
-        ["tenant_id", "job_id", "job_snapshot_id"],
+        ["tenant_id", "job_id"],
         unique=True,
         postgresql_where="status = 'pending'",
     )
