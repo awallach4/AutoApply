@@ -693,10 +693,7 @@ def _drop_unresolved_postings(
     resolved: list[Any] = []
 
     for breakdown in selected:
-        if (
-            getattr(breakdown, "job_id", None)
-            and getattr(breakdown, "job_snapshot_id", None)
-        ):
+        if getattr(breakdown, "job_id", None):
             resolved.append(breakdown)
         else:
             logger.warning(
