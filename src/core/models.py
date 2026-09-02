@@ -502,15 +502,13 @@ class ReviewQueueEntry(Base):
         ),
         Index("ix_review_queue_job", "job_id"),
         Index("ix_review_queue_run_id", "run_id"),
-        # Phase 17.2 codex fix: partial unique index for pending-only.
-        # Prevents the orchestrator from inserting duplicate pending
-        # rows for the same snapshot AND lets the same snapshot pass
-        # through the lifecycle multiple times (re-run weeks later).
+        # Phase 17.2: pending review entries are unique per tenant + job.
+        # The snapshot identifies the JD version the materials were generated
+        # against, but does not define review-entry identity.
         Index(
-            "ux_review_queue_pending_per_snapshot",
+            "ux_review_queue_pending_per_job",
             "tenant_id",
             "job_id",
-            "job_snapshot_id",
             unique=True,
             postgresql_where="status = 'pending'",
         ),

@@ -111,7 +111,7 @@ def _coerce_uuid(value: uuid.UUID | str | None) -> uuid.UUID | None:
 def create_entry(session: Session, args: CreateEntryArgs) -> ReviewQueueEntry:
     """Insert a ``pending`` review_queue row and return the persisted entry.
 
-    Idempotent on ``(tenant_id, job_id, job_snapshot_id, status='pending')``
+    Idempotent on ``(tenant_id, job_id, status='pending')``
     via the table's UNIQUE constraint -- a second call for the same
     job + snapshot returns the existing pending row instead of
     raising. This matters because the plan-run orchestrator can
@@ -126,7 +126,6 @@ def create_entry(session: Session, args: CreateEntryArgs) -> ReviewQueueEntry:
             select(ReviewQueueEntry).where(
                 ReviewQueueEntry.tenant_id == args.tenant_id,
                 ReviewQueueEntry.job_id == job_uuid,
-                ReviewQueueEntry.job_snapshot_id == snap_uuid,
                 ReviewQueueEntry.status == "pending",
             )
         )
