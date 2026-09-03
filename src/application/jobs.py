@@ -461,7 +461,8 @@ async def _search_ats_with_job_index(
                     jobs = scraped_jobs
 
                     for item in jobs:
-                        enrich_posting(
+
+                        result = enrich_posting(
                             store=store,
                             source=item.source,
                             source_id=item.source_id,
@@ -476,6 +477,13 @@ async def _search_ats_with_job_index(
                                 "application_url": item.application_url,
                                 "raw_data": item.raw_data,
                             },
+                        )
+
+                        logger.info(
+                            "Enrichment result: posting_id=%s snapshot_id=%s changed=%s",
+                            result.posting_id,
+                            result.snapshot_id,
+                            result.content_changed,
                         )
                 else:
                     jobs = _raw_jobs_from_index_postings(
