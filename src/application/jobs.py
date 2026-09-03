@@ -411,7 +411,10 @@ async def _search_ats_with_job_index(
     from src.jobs.search import cached_search
     from src.jobs.store import JobIndexStore
 
-    companies = companies or {}
+    if companies is None:
+        from src.intake.batch import load_company_list
+
+        companies = load_company_list(config_dir / "companies.yaml")
 
     all_jobs: list = []
     events: list[dict] = []
