@@ -693,13 +693,18 @@ def _resolve_and_patch_posting_ids(
                 getattr(bd, "title", None),
             )
             continue
+
         posting_id, snapshot_id = persisted
-        # Mutate in place. ScoreBreakdown is a dataclass; both fields
-        # are typed as ``str | None`` for job_snapshot_id (Phase 16.1)
-        # and ``str`` for job_id.
+
+        if snapshot_id is None:
+            logger.warning(
+                "Skipping posting %s: JobPosting has no JobSnapshot",
+                posting_id,
+            )
+            continue
+
         bd.job_id = str(posting_id)
-        if snapshot_id is not None:
-            bd.job_snapshot_id = str(snapshot_id)
+        bd.job_snapshot_id = str(snapshot_id)
         resolved.append(bd)
     return resolved
 

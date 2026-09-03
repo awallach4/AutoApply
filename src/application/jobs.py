@@ -423,98 +423,98 @@ async def _search_ats_with_job_index(
         if not slugs:
             continue
 
-        scraped_jobs: list = []
+    scraped_jobs: list = []
 
-        def fetch_and_capture() -> list:
-            result = search_ats_jobs(
-                profile=profile,
-                config_dir=config_dir,
-                companies={ats_source: slugs},
-                parse_jds=parse_jds,
-                use_llm=use_llm,
-            )
-            scraped_jobs[:] = list(result)
-            return scraped_jobs
+    def fetch_and_capture() -> list:
+        result = search_ats_jobs(
+            profile=profile,
+            config_dir=config_dir,
+            companies={ats_source: slugs},
+            parse_jds=parse_jds,
+            use_llm=use_llm,
+        )
+        scraped_jobs[:] = list(result)
+        return scraped_jobs
 
-        try:
-            session_factory = get_session_factory(load_config())
-            with session_factory() as session, session.begin():
-                store = JobIndexStore(session)
+    try:
+        session_factory = get_session_factory(load_config())
+        with session_factory() as session, session.begin():
+            store = JobIndexStore(session)
 
-                outcome = await cached_search(
-                    store=store,
-                    cache=get_cache(),
-                    source=ats_source,
-                    params={
-                        "profile": profile or "",
-                        "companies": {ats_source: slugs},
-                        "parse_jds": parse_jds,
-                        "use_llm": use_llm,
-                    },
-                    fetch_fn=fetch_and_capture,
-                    force_refresh=force_refresh,
-                    freshness_hours=freshness_hours,
-                )
-
-                if scraped_jobs:
-                    jobs = scraped_jobs
-                else:
-                    jobs = _raw_jobs_from_index_postings(
-                        session,
-                        outcome.postings,
-                    )
-
-                all_jobs.extend(jobs)
-
-                events.append(
-                    {
-                        "source": ats_source,
-                        "ok": True,
-                        "cached": outcome.cached,
-                        "stale": outcome.stale,
-                        "force_refresh": force_refresh,
-                        "query_id": str(outcome.query_id),
-                        "last_run_at": _isoformat(outcome.last_run_at),
-                        "last_success_at": _isoformat(outcome.last_success_at),
-                        "last_error": outcome.last_error,
-                        "counts": outcome.counts,
-                    }
-                )
-
-        except Exception as exc:
-            logger.warning(
-                "Job Index ATS search failed for %s; falling back to live search: %s",
-                ats_source,
-                exc,
+            outcome = await cached_search(
+                store=store,
+                cache=get_cache(),
+                source=ats_source,
+                params={
+                    "profile": profile or "",
+                    "companies": {ats_source: slugs},
+                    "parse_jds": parse_jds,
+                    "use_llm": use_llm,
+                },
+                fetch_fn=fetch_and_capture,
+                force_refresh=force_refresh,
+                freshness_hours=freshness_hours,
             )
 
-            # Preserve existing behavior if the Job Index is unavailable.
-            try:
-                jobs = list(
-                    search_ats_jobs(
-                        profile=profile,
-                        config_dir=config_dir,
-                        companies={ats_source: slugs},
-                        parse_jds=parse_jds,
-                        use_llm=use_llm,
-                    )
+            if scraped_jobs:
+                jobs = scraped_jobs
+            else:
+                jobs = _raw_jobs_from_index_postings(
+                    session,
+                    outcome.postings,
                 )
-                all_jobs.extend(jobs)
-            except Exception:
-                raise
+
+            all_jobs.extend(jobs)
 
             events.append(
                 {
                     "source": ats_source,
-                    "ok": False,
-                    "cached": False,
-                    "stale": False,
-                    "force_refresh": True,
-                    "fallback_live": True,
-                    "error": str(exc),
-                    "counts": {"fallback": len(jobs)},
+                    "ok": True,
+                    "cached": outcome.cached,
+                    "stale": outcome.stale,
+                    "force_refresh": force_refresh,
+                    "query_id": str(outcome.query_id),
+                    "last_run_at": _isoformat(outcome.last_run_at),
+                    "last_success_at": _isoformat(outcome.last_success_at),
+                    "last_error": outcome.last_error,
+                    "counts": outcome.counts,
                 }
             )
+
+    except Exception as exc:
+        logger.warning(
+            "Job Index ATS search failed for %s; falling back to live search: %s",
+            ats_source,
+            exc,
+        )
+
+        # Preserve existing behavior if the Job Index is unavailable.
+        try:
+            jobs = list(
+                search_ats_jobs(
+                    profile=profile,
+                    config_dir=config_dir,
+                    companies={ats_source: slugs},
+                    parse_jds=parse_jds,
+                    use_llm=use_llm,
+                )
+            )
+            all_jobs.extend(jobs)
+        except Exception:
+            raise
+
+        events.append(
+            {
+                "source": ats_source,
+                "ok": False,
+                "cached": False,
+                "stale": False,
+                "force_refresh": True,
+                "fallback_live": True,
+                "error": str(exc),
+                "counts": {"fallback": len(jobs)},
+            }
+        )
 
     return all_jobs, events
 
