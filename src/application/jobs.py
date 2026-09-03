@@ -110,17 +110,34 @@ async def search_jobs(
 
     if source in ("ats", "all"):
         try:
-            from src.intake.search import search_jobs as search_ats_jobs
+            ats_companies = _build_companies_filter(config_dir, ats, company)
 
-            ats_jobs = search_ats_jobs(
-                profile=profile,
-                config_dir=config_dir,
-                companies=_build_companies_filter(config_dir, ats, company),
-                parse_jds=not no_parse,
-                use_llm=use_llm,
-            )
+            if use_job_index:
+                ats_jobs, ats_index_events = await _search_ats_with_job_index(
+                    companies=ats_companies,
+                    profile=profile,
+                    config_dir=config_dir,
+                    parse_jds=not no_parse,
+                    use_llm=use_llm,
+                    force_refresh=force_refresh
+                    or not (search_cache_policy or {}).get("enabled", True),
+                    freshness_hours=(search_cache_policy or {}).get("ttl_hours", 24),
+                )
+                job_index_events.extend(ats_index_events)
+            else:
+                from src.intake.search import search_jobs as search_ats_jobs
+
+                ats_jobs = search_ats_jobs(
+                    profile=profile,
+                    config_dir=config_dir,
+                    companies=ats_companies,
+                    parse_jds=not no_parse,
+                    use_llm=use_llm,
+                )
+
             counts["ats"] = len(ats_jobs)
             jobs.extend(ats_jobs)
+
         except Exception as exc:
             errors.append(f"ATS: {exc}")
 
@@ -373,6 +390,130 @@ async def _search_linkedin_with_job_index(
             "location": search_kwargs.get("location") or "",
         }
 
+async def _search_ats_with_job_index(
+    *,
+    companies: dict[str, list[str]] | None,
+    profile: str | None,
+    config_dir: Path,
+    parse_jds: bool,
+    use_llm: bool,
+    force_refresh: bool,
+    freshness_hours: int,
+) -> tuple[list, list[dict]]:
+    """Run ATS searches through the Phase 13 Job Index.
+
+    Each ATS source gets its own cached_search() call so JobPosting
+    identity remains keyed by (tenant_id, source, source_id).
+    """
+    from src.cache import get_cache
+    from src.core.database import get_session_factory
+    from src.intake.search import search_jobs as search_ats_jobs
+    from src.jobs.search import cached_search
+    from src.jobs.store import JobIndexStore
+
+    companies = companies or {}
+
+    all_jobs: list = []
+    events: list[dict] = []
+
+    for ats_source, slugs in companies.items():
+        if not slugs:
+            continue
+
+        scraped_jobs: list = []
+
+        def fetch_and_capture() -> list:
+            result = search_ats_jobs(
+                profile=profile,
+                config_dir=config_dir,
+                companies={ats_source: slugs},
+                parse_jds=parse_jds,
+                use_llm=use_llm,
+            )
+            scraped_jobs[:] = list(result)
+            return scraped_jobs
+
+        try:
+            session_factory = get_session_factory(load_config())
+            with session_factory() as session, session.begin():
+                store = JobIndexStore(session)
+
+                outcome = await cached_search(
+                    store=store,
+                    cache=get_cache(),
+                    source=ats_source,
+                    params={
+                        "profile": profile or "",
+                        "companies": {ats_source: slugs},
+                        "parse_jds": parse_jds,
+                        "use_llm": use_llm,
+                    },
+                    fetch_fn=fetch_and_capture,
+                    force_refresh=force_refresh,
+                    freshness_hours=freshness_hours,
+                )
+
+                if scraped_jobs:
+                    jobs = scraped_jobs
+                else:
+                    jobs = _raw_jobs_from_index_postings(
+                        session,
+                        outcome.postings,
+                    )
+
+                all_jobs.extend(jobs)
+
+                events.append(
+                    {
+                        "source": ats_source,
+                        "ok": True,
+                        "cached": outcome.cached,
+                        "stale": outcome.stale,
+                        "force_refresh": force_refresh,
+                        "query_id": str(outcome.query_id),
+                        "last_run_at": _isoformat(outcome.last_run_at),
+                        "last_success_at": _isoformat(outcome.last_success_at),
+                        "last_error": outcome.last_error,
+                        "counts": outcome.counts,
+                    }
+                )
+
+        except Exception as exc:
+            logger.warning(
+                "Job Index ATS search failed for %s; falling back to live search: %s",
+                ats_source,
+                exc,
+            )
+
+            # Preserve existing behavior if the Job Index is unavailable.
+            try:
+                jobs = list(
+                    search_ats_jobs(
+                        profile=profile,
+                        config_dir=config_dir,
+                        companies={ats_source: slugs},
+                        parse_jds=parse_jds,
+                        use_llm=use_llm,
+                    )
+                )
+                all_jobs.extend(jobs)
+            except Exception:
+                raise
+
+            events.append(
+                {
+                    "source": ats_source,
+                    "ok": False,
+                    "cached": False,
+                    "stale": False,
+                    "force_refresh": True,
+                    "fallback_live": True,
+                    "error": str(exc),
+                    "counts": {"fallback": len(jobs)},
+                }
+            )
+
+    return all_jobs, events
 
 def _search_cache_policy() -> dict:
     raw = load_config().get("search_cache", {})

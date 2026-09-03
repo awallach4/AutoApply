@@ -582,7 +582,7 @@ def _default_score_fn(
 
     if tenant_id:
         try:
-            _resolve_and_patch_posting_ids(breakdowns, raw_jobs, tenant_id)
+            breakdowns = _resolve_and_patch_posting_ids(breakdowns, raw_jobs, tenant_id)
         except Exception:  # noqa: BLE001 - non-fatal; logged
             logger.exception(
                 "plan_run: posting-id resolution failed; review entries "
@@ -596,7 +596,7 @@ def _resolve_and_patch_posting_ids(
     breakdowns: list[Any],
     raw_jobs: list[Any],
     tenant_id: str,
-) -> None:
+) -> list[Any]:
     """Look up ``JobPosting`` by ``(tenant_id, source, source_id)`` and
     rewrite each breakdown's ``job_id`` / ``job_snapshot_id`` to the
     persisted ids.
@@ -612,7 +612,7 @@ def _resolve_and_patch_posting_ids(
     better than the current behaviour (silent failure on every entry).
     """
     if not breakdowns or not raw_jobs:
-        return
+        return []
 
     from sqlalchemy import and_, or_, select  # noqa: PLC0415
 
@@ -634,7 +634,7 @@ def _resolve_and_patch_posting_ids(
             rawjob_id_to_key[str(rj_id)] = key
 
     if not keys:
-        return
+        return []
 
     factory = get_session_factory()
     with factory() as session:
@@ -664,11 +664,19 @@ def _resolve_and_patch_posting_ids(
         (row.source, row.source_id): (row.id, row.latest_snapshot_id)
         for row in rows
     }
+    resolved: list[Any] = []
 
     for bd in breakdowns:
         rj_id = str(getattr(bd, "job_id", "") or "")
         key = rawjob_id_to_key.get(rj_id)
         if key is None:
+            logger.warning(
+                "plan_run: breakdown job_id does not map to a RawJob: "
+                "job_id=%s company=%s title=%s",
+                rj_id,
+                getattr(bd, "company", None),
+                getattr(bd, "title", None),
+            )
             continue
         persisted = key_to_ids.get(key)
         if persisted is None:
@@ -676,6 +684,14 @@ def _resolve_and_patch_posting_ids(
             # job index, or the row was retention-purged between scrape
             # and score). Leave the breakdown alone -- the review row
             # will still write but pre-submit will fail informatively.
+            logger.warning(
+                "plan_run: no persistent JobPosting for source=%s"
+                "source_id=%s company=%s title=%s",
+                key[0],
+                key[1],
+                getattr(bd, "company", None),
+                getattr(bd, "title", None),
+            )
             continue
         posting_id, snapshot_id = persisted
         # Mutate in place. ScoreBreakdown is a dataclass; both fields
@@ -684,6 +700,8 @@ def _resolve_and_patch_posting_ids(
         bd.job_id = str(posting_id)
         if snapshot_id is not None:
             bd.job_snapshot_id = str(snapshot_id)
+        resolved.append(bd)
+    return resolved
 
 def _drop_unresolved_postings(
     *,
