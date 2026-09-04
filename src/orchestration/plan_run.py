@@ -574,12 +574,30 @@ def _default_score_fn(
     from src.matching.scorer import build_scoring_context  # noqa: PLC0415
     from src.matching.scorer import score_jobs as score_ranked  # noqa: PLC0415
     from src.memory.profile import load_profile_yaml  # noqa: PLC0415
+    from src.intake.filters import load_filter_profiles
+    from src.matching.rules import load_applicant_context
+    from src.core.config import PROJECT_ROOT
 
     path = get_profile_path(profile_id)
     if path is None or not path.exists():
         raise PlanRunError(f"profile {profile_id!r} not found at {path}")
     profile_data = load_profile_yaml(path)
-    ctx = build_scoring_context(profile_data)
+
+    filters_path = PROJECT_ROOT / "config" / "filters.yaml"
+    filter_profiles = load_filter_profiles(filters_path)
+    active_filter = filter_profiles.get("default")
+
+    applicant_ctx = load_applicant_context(profile_data)
+
+    if active_filter is not None:
+        applicant_ctx.preferred_employment_types = [
+            str(t) for t in active_filter.employment_types
+        ]
+        applicant_ctx.citizenship = "US Citizen"
+        applicant_ctx.work_authorization = "US Citizen"
+        applicant_ctx.visa_sponsorship_needed = False
+
+    ctx = build_scoring_context(profile_data, applicant_ctx=applicant_ctx)
 
     raw_jobs = [_coerce_job_to_rawjob(j) for j in jobs]
     raw_jobs = [j for j in raw_jobs if j is not None]
