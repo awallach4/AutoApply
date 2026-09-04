@@ -52,6 +52,7 @@ from src.application.review import (
 )
 from src.core.database import get_session_factory
 from src.review.state_machine import InvalidTransitionError
+from src.infrastructure.db.models import JobSnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -129,9 +130,35 @@ async def list_review_entries(
         entries = list_entries(
             session, tenant_id=_tenant(), status=status, limit=limit  # type: ignore[arg-type]
         )
+
+        snapshot_ids = {
+            entry.job_snapshot_id
+            for entry in entries
+            if entry.job_snapshot_id is not None
+        }
+
+        snapshots = {}
+        if snapshot_ids:
+            snapshots = {
+                snapshot.id: snapshot
+                for snapshot in session.execute(
+                    select(JobSnapshot).where(JobSnapshot.id.in_(snapshot_ids))
+                ).scalars()
+            }
+
         return {
             "ok": True,
-            "entries": [serialize_entry(e) for e in entries],
+            "entries": [
+                serialize_entry(
+                    entry,
+                    application_url=(
+                        snapshots[entry.job_snapshot_id].application_url
+                        if entry.job_snapshot_id in snapshots
+                        else None
+                    ),
+                )
+                for entry in entries
+            ],
         }
 
 

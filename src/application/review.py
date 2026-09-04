@@ -65,7 +65,7 @@ class CreateEntryArgs:
     run_id: str | None = None
 
 
-def serialize_entry(entry: ReviewQueueEntry) -> dict[str, Any]:
+def serialize_entry(entry: ReviewQueueEntry, *, application_url: str | None = None) -> dict[str, Any]:
     """Map an ORM row to a JSON-friendly dict.
 
     The Phase 17.3 kanban consumes this shape; the Phase 17.6 morning
@@ -83,6 +83,7 @@ def serialize_entry(entry: ReviewQueueEntry) -> dict[str, Any]:
         "score_breakdown": entry.score_breakdown,
         "company": entry.company,
         "title": entry.title,
+        "application_url": application_url,
         "status": entry.status,
         "decision": entry.decision,
         "reason": entry.reason,
