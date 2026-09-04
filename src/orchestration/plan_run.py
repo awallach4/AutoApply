@@ -346,6 +346,11 @@ async def run_plan(
         selected=eligible,
     )
 
+    eligible = _drop_already_rejected_review(
+        tenant_id=tenant_id,
+        selected=eligible,
+    )
+
     selected = eligible[:top_n] if top_n > 0 else []
 
     # ----- 3. Persist review-queue rows + enqueue (skipped on dry_run)
@@ -870,6 +875,59 @@ def _drop_already_pending_review(
                     ReviewQueueEntry.tenant_id == tenant_id,
                     ReviewQueueEntry.job_id.in_(job_ids),
                     ReviewQueueEntry.status == "pending",
+                )
+            ).scalars()
+        )
+
+    return [
+        bd
+        for job_id, bd in by_uuid.items()
+        if job_id not in existing
+    ]
+
+def _drop_already_rejected_review(
+    *,
+    tenant_id: str,
+    selected: list[Any],
+) -> list[Any]:
+    """Remove jobs that already have a rejected review entry.
+
+    Once a job has been explicitly rejected, there is no reason to
+    generate materials for it or return it to the review queue on a
+    later plan run.
+    """
+    if not selected:
+        return []
+
+    import uuid as uuid_mod  # noqa: PLC0415
+
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from src.core.models import ReviewQueueEntry  # noqa: PLC0415
+    from src.core.database import get_session_factory  # noqa: PLC0415
+
+    job_ids: list[uuid_mod.UUID] = []
+    by_uuid: dict[uuid_mod.UUID, Any] = {}
+
+    for breakdown in selected:
+        try:
+            job_uuid = uuid_mod.UUID(str(getattr(breakdown, "job_id", "")))
+        except ValueError:
+            continue
+        job_ids.append(job_uuid)
+        by_uuid[job_uuid] = breakdown
+
+    if not job_ids:
+        return selected
+
+    factory = get_session_factory()
+    with factory() as session:
+        existing = set(
+            session.execute(
+                select(ReviewQueueEntry.job_id).where(
+                    ReviewQueueEntry.tenant_id == tenant_id,
+                    ReviewQueueEntry.job_id.in_(job_ids),
+                    ReviewQueueEntry.status == "rejected",
                 )
             ).scalars()
         )
