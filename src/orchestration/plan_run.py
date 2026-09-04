@@ -811,7 +811,6 @@ def _create_review_entries(
                     score_breakdown=bd_dict,
                     company=getattr(breakdown, "company", None),
                     title=getattr(breakdown, "title", None),
-                    application_url=getattr(breakdown, "application_url", None),
                     run_id=run_id,
                 ),
             )
