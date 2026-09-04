@@ -85,6 +85,7 @@ def serialize_entry(entry: ReviewQueueEntry) -> dict[str, Any]:
         "company": entry.company,
         "title": entry.title,
         "status": entry.status,
+        "application_url": entry.application_url,
         "decision": entry.decision,
         "reason": entry.reason,
         "reviewer": entry.reviewer,
