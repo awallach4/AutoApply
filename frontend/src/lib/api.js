@@ -738,6 +738,13 @@ export const api = {
       body: JSON.stringify(payload)
     });
   },
+  reviewApplied(entryId, payload = {}) {
+    return request(`/api/review/${encodeURIComponent(entryId)}/applied`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+  },
   reviewReject(entryId, payload = {}) {
     return request(`/api/review/${encodeURIComponent(entryId)}/reject`, {
       method: "POST",

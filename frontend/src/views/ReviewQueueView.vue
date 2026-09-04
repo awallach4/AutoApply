@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive } from "vue"
+import { computed, onMounted, reactive } from "vue";
 import {
   BookMarked,
   Check,
@@ -14,58 +14,59 @@ import {
   Sparkles,
   Trash2,
   UploadCloud,
-  Wand2,
-} from "lucide-vue-next"
+  Wand2
+} from "lucide-vue-next";
 
-import AppSelect from "@/components/AppSelect.vue"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import AppSelect from "@/components/AppSelect.vue";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { EmptyState } from "@/components/ui/empty-state"
-import { ProgressBanner } from "@/components/ui/progress-banner"
-import { api } from "@/lib/api"
-import { formatDate, formatPercent } from "@/lib/format"
+  DialogTitle
+} from "@/components/ui/dialog";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ProgressBanner } from "@/components/ui/progress-banner";
+import { api } from "@/lib/api";
+import { formatDate, formatPercent } from "@/lib/format";
 
 const COLUMNS = [
   { id: "pending", label: "Waiting on you", showStale: true },
   { id: "approved", label: "Ready to submit" },
   { id: "submitted", label: "Submitted today" },
-  { id: "rejected", label: "Skipped today" },
-]
+  { id: "rejected", label: "Skipped today" }
+];
 
 const GATE_MESSAGES = {
-  refresh: "The job posting changed since AutoApply prepared this. Refresh and try again.",
+  refresh:
+    "The job posting changed since AutoApply prepared this. Refresh and try again.",
   expired: "This job is no longer accepting applications.",
-  missing_binding: "Internal link is missing — please refresh this entry.",
-}
+  missing_binding: "Internal link is missing — please refresh this entry."
+};
 
 const REPLACE_MATERIAL_TYPE_OPTIONS = [
   { value: "resume_docx", label: "Resume (.docx)" },
   { value: "resume_pdf", label: "Resume (.pdf)" },
   { value: "cover_letter_docx", label: "Cover Letter (.docx)" },
-  { value: "cover_letter_pdf", label: "Cover Letter (.pdf)" },
-]
+  { value: "cover_letter_pdf", label: "Cover Letter (.pdf)" }
+];
 
 const REPLACE_STRATEGY_OPTIONS = [
   { value: "regenerate", label: "Regenerate from a template" },
   { value: "patch_existing", label: "Patch a document from my library" },
-  { value: "use_library", label: "Use library document as-is (no edits)" },
-]
+  { value: "use_library", label: "Use library document as-is (no edits)" }
+];
 
 const PATCH_AGGRESSIVENESS_OPTIONS = [
   { value: "conservative", label: "Conservative · barely touch the wording" },
   { value: "balanced", label: "Balanced · sensible rewriting (recommended)" },
-  { value: "aggressive", label: "Aggressive · rewrite freely to match the JD" },
-]
+  { value: "aggressive", label: "Aggressive · rewrite freely to match the JD" }
+];
 
 const state = reactive({
   loading: false,
@@ -82,14 +83,14 @@ const state = reactive({
   filterTitle: "",
   // Phase 17.8: lookups for the Replace materials dialog.
   templates: { resume: [], cover_letter: [] },
-  documents: { resume: [], cover_letter: [] },
-})
+  documents: { resume: [], cover_letter: [] }
+});
 
 const discardDialog = reactive({
   open: false,
   application: null,
-  reason: "",
-})
+  reason: ""
+});
 
 const replaceDialog = reactive({
   open: false,
@@ -106,8 +107,8 @@ const replaceDialog = reactive({
   patchAllowReorderSections: null,
   patchAllowAddRemoveBullets: null,
   submitting: false,
-  progress: "",
-})
+  progress: ""
+});
 
 const promoteDialog = reactive({
   open: false,
@@ -115,180 +116,196 @@ const promoteDialog = reactive({
   artifactPath: "",
   documentType: "resume",
   displayName: "",
-  submitting: false,
-})
+  submitting: false
+});
 
 function statusBucket(entry) {
-  if (entry.status === "stale") return "pending"
-  return entry.status
+  if (entry.status === "stale") return "pending";
+  return entry.status;
 }
 
 const entriesByColumn = computed(() => {
-  const out = Object.fromEntries(COLUMNS.map((c) => [c.id, []]))
+  const out = Object.fromEntries(COLUMNS.map((c) => [c.id, []]));
   for (const entry of state.entries) {
-    const bucket = statusBucket(entry)
-    if (out[bucket]) out[bucket].push(entry)
+    const bucket = statusBucket(entry);
+    if (out[bucket]) out[bucket].push(entry);
   }
-  return out
-})
+  return out;
+});
 
 const counts = computed(() => {
-  const out = {}
+  const out = {};
   for (const col of COLUMNS) {
-    out[col.id] = entriesByColumn.value[col.id].length
+    out[col.id] = entriesByColumn.value[col.id].length;
   }
-  out.selected = state.selected.size
-  return out
-})
+  out.selected = state.selected.size;
+  return out;
+});
 
 const selectableEntries = computed(() =>
-  state.entries.filter((e) => e.status === "pending" || e.status === "stale"),
-)
+  state.entries.filter((e) => e.status === "pending" || e.status === "stale")
+);
 
 async function refresh() {
-  state.loading = true
-  state.error = ""
+  state.loading = true;
+  state.error = "";
   try {
-    const [reviewResponse, applicationsResponse, templatesResponse, documentsResponse] =
-      await Promise.all([
-        api.reviewList(),
-        api
-          .applications({ status: "REVIEW_REQUIRED", limit: 50 })
-          .catch(() => ({ applications: [] })),
-        api.templates().catch(() => ({ templates: {} })),
-        api.documents().catch(() => ({ documents: [] })),
-      ])
-    state.entries = reviewResponse.entries || []
+    const [
+      reviewResponse,
+      applicationsResponse,
+      templatesResponse,
+      documentsResponse
+    ] = await Promise.all([
+      api.reviewList(),
+      api
+        .applications({ status: "REVIEW_REQUIRED", limit: 50 })
+        .catch(() => ({ applications: [] })),
+      api.templates().catch(() => ({ templates: {} })),
+      api.documents().catch(() => ({ documents: [] }))
+    ]);
+    state.entries = reviewResponse.entries || [];
     state.pausedApplications = (applicationsResponse.applications || []).filter(
-      (app) => app.status === "REVIEW_REQUIRED",
-    )
+      (app) => app.status === "REVIEW_REQUIRED"
+    );
     state.templates = {
       resume: templatesResponse?.templates?.resume || [],
-      cover_letter: templatesResponse?.templates?.cover_letter || [],
-    }
-    const docs = documentsResponse?.documents || []
+      cover_letter: templatesResponse?.templates?.cover_letter || []
+    };
+    const docs = documentsResponse?.documents || [];
     state.documents = {
       resume: docs.filter((d) => d.document_type === "resume" && d.editable),
-      cover_letter: docs.filter((d) => d.document_type === "cover_letter" && d.editable),
-    }
-    const present = new Set(state.entries.map((e) => e.id))
-    state.selected = new Set([...state.selected].filter((id) => present.has(id)))
+      cover_letter: docs.filter(
+        (d) => d.document_type === "cover_letter" && d.editable
+      )
+    };
+    const present = new Set(state.entries.map((e) => e.id));
+    state.selected = new Set(
+      [...state.selected].filter((id) => present.has(id))
+    );
   } catch (err) {
-    state.error = err?.message || "Couldn't load this queue."
+    state.error = err?.message || "Couldn't load this queue.";
   } finally {
-    state.loading = false
+    state.loading = false;
   }
 }
 
 function materialDocumentType(materialType) {
-  return materialType.startsWith("cover_letter") ? "cover_letter" : "resume"
+  return materialType.startsWith("cover_letter") ? "cover_letter" : "resume";
 }
 
 function replaceTemplateOptions() {
-  const docType = materialDocumentType(replaceDialog.materialType)
+  const docType = materialDocumentType(replaceDialog.materialType);
   return [
     { value: "", label: "Use my default" },
-    ...((state.templates[docType] || []).map((tpl) => ({
+    ...(state.templates[docType] || []).map((tpl) => ({
       value: tpl.template_id,
-      label: tpl.name || tpl.template_id,
-    }))),
-  ]
+      label: tpl.name || tpl.template_id
+    }))
+  ];
 }
 
 function replaceDocumentOptions() {
-  const docType = materialDocumentType(replaceDialog.materialType)
-  const docs = state.documents[docType] || []
+  const docType = materialDocumentType(replaceDialog.materialType);
+  const docs = state.documents[docType] || [];
   return [
     {
       value: "",
-      label: docs.length ? "Pick a document" : "No editable documents in your library",
+      label: docs.length
+        ? "Pick a document"
+        : "No editable documents in your library"
     },
     ...docs.map((doc) => ({
       value: doc.id,
-      label: `${doc.display_name} · ${doc.source_type.toUpperCase()}`,
-    })),
-  ]
+      label: `${doc.display_name} · ${doc.source_type.toUpperCase()}`
+    }))
+  ];
 }
 
 function openReplaceDialog(application) {
-  const hasCover = Boolean(application.cover_letter_version)
-  replaceDialog.application = application
-  replaceDialog.materialType = "resume_docx"
-  replaceDialog.strategy = "regenerate"
-  replaceDialog.templateId = ""
-  replaceDialog.sourceDocumentId = ""
-  replaceDialog.patchAggressiveness = null
-  replaceDialog.patchAllowReorderSections = null
-  replaceDialog.patchAllowAddRemoveBullets = null
-  replaceDialog.submitting = false
-  replaceDialog.progress = ""
-  replaceDialog.open = true
+  const hasCover = Boolean(application.cover_letter_version);
+  replaceDialog.application = application;
+  replaceDialog.materialType = "resume_docx";
+  replaceDialog.strategy = "regenerate";
+  replaceDialog.templateId = "";
+  replaceDialog.sourceDocumentId = "";
+  replaceDialog.patchAggressiveness = null;
+  replaceDialog.patchAllowReorderSections = null;
+  replaceDialog.patchAllowAddRemoveBullets = null;
+  replaceDialog.submitting = false;
+  replaceDialog.progress = "";
+  replaceDialog.open = true;
   // If the user clearly only has a cover letter to fix, switch the
   // initial radio so they don't have to.
   if (!application.resume_version && hasCover) {
-    replaceDialog.materialType = "cover_letter_docx"
+    replaceDialog.materialType = "cover_letter_docx";
   }
 }
 
 function closeReplaceDialog() {
-  replaceDialog.open = false
-  replaceDialog.application = null
+  replaceDialog.open = false;
+  replaceDialog.application = null;
 }
 
 async function confirmReplace() {
-  if (!replaceDialog.application) return
-  replaceDialog.submitting = true
-  replaceDialog.progress = "Queued material generation..."
-  state.message = ""
-  state.messageVariant = "info"
+  if (!replaceDialog.application) return;
+  replaceDialog.submitting = true;
+  replaceDialog.progress = "Queued material generation...";
+  state.message = "";
+  state.messageVariant = "info";
   try {
-    const result = await api.regenerateApplicationMaterial(replaceDialog.application.id, {
-      materialType: replaceDialog.materialType,
-      strategy: replaceDialog.strategy || null,
-      templateId: replaceDialog.templateId || null,
-      sourceDocumentId: replaceDialog.sourceDocumentId || null,
-      patchAggressiveness:
-        replaceDialog.strategy === "patch_existing"
-          ? replaceDialog.patchAggressiveness
-          : null,
-      patchAllowReorderSections:
-        replaceDialog.strategy === "patch_existing"
-          ? replaceDialog.patchAllowReorderSections
-          : null,
-      patchAllowAddRemoveBullets:
-        replaceDialog.strategy === "patch_existing"
-          ? replaceDialog.patchAllowAddRemoveBullets
-          : null,
-      // 5-minute budget gives the fit-planner loop room for one or
-      // two LLM rounds (~30-60s each) plus DOCX rendering + PDF
-      // conversion without blowing past on slow providers. The
-      // backend Celery task has its own much longer time limit; this
-      // poll just decides when the dialog stops waiting.
-      pollTimeoutMs: 5 * 60 * 1000,
-      onProgress(row) {
-        const status = row?.status || "queued"
-        replaceDialog.progress =
-          status === "queued"
-            ? "Queued; waiting for a materials worker to pick it up..."
-            : `Materials worker status: ${status}`
-      },
-    })
-    const notes = Array.isArray(result?.strategy_notes) ? result.strategy_notes : []
-    const verb = replaceDialog.strategy === "use_library" ? "replaced" : "regenerated"
+    const result = await api.regenerateApplicationMaterial(
+      replaceDialog.application.id,
+      {
+        materialType: replaceDialog.materialType,
+        strategy: replaceDialog.strategy || null,
+        templateId: replaceDialog.templateId || null,
+        sourceDocumentId: replaceDialog.sourceDocumentId || null,
+        patchAggressiveness:
+          replaceDialog.strategy === "patch_existing"
+            ? replaceDialog.patchAggressiveness
+            : null,
+        patchAllowReorderSections:
+          replaceDialog.strategy === "patch_existing"
+            ? replaceDialog.patchAllowReorderSections
+            : null,
+        patchAllowAddRemoveBullets:
+          replaceDialog.strategy === "patch_existing"
+            ? replaceDialog.patchAllowAddRemoveBullets
+            : null,
+        // 5-minute budget gives the fit-planner loop room for one or
+        // two LLM rounds (~30-60s each) plus DOCX rendering + PDF
+        // conversion without blowing past on slow providers. The
+        // backend Celery task has its own much longer time limit; this
+        // poll just decides when the dialog stops waiting.
+        pollTimeoutMs: 5 * 60 * 1000,
+        onProgress(row) {
+          const status = row?.status || "queued";
+          replaceDialog.progress =
+            status === "queued"
+              ? "Queued; waiting for a materials worker to pick it up..."
+              : `Materials worker status: ${status}`;
+        }
+      }
+    );
+    const notes = Array.isArray(result?.strategy_notes)
+      ? result.strategy_notes
+      : [];
+    const verb =
+      replaceDialog.strategy === "use_library" ? "replaced" : "regenerated";
     state.message =
-      `Materials ${verb}.` + (notes.length ? ` (${notes.join("; ")})` : "")
-    state.messageVariant = "success"
-    closeReplaceDialog()
-    await refresh()
+      `Materials ${verb}.` + (notes.length ? ` (${notes.join("; ")})` : "");
+    state.messageVariant = "success";
+    closeReplaceDialog();
+    await refresh();
   } catch (err) {
-    const timedOut = String(err?.message || "").includes("pollTask timed out")
+    const timedOut = String(err?.message || "").includes("pollTask timed out");
     state.message = timedOut
       ? "Materials generation was queued but no worker completed it within 5 minutes. Check the materials worker is running and look at the task row for the latest status."
-      : err?.message || "Couldn't regenerate materials."
-    state.messageVariant = "error"
+      : err?.message || "Couldn't regenerate materials.";
+    state.messageVariant = "error";
   } finally {
-    replaceDialog.submitting = false
-    replaceDialog.progress = ""
+    replaceDialog.submitting = false;
+    replaceDialog.progress = "";
   }
 }
 
@@ -296,127 +313,128 @@ function openPromoteDialog(application, artifactKind) {
   const path =
     artifactKind === "resume"
       ? application.resume_version
-      : application.cover_letter_version
-  if (!path) return
-  promoteDialog.application = application
-  promoteDialog.artifactPath = path
-  promoteDialog.documentType = artifactKind === "resume" ? "resume" : "cover_letter"
-  promoteDialog.displayName = `${application.job.company} – ${artifactKind === "resume" ? "Resume" : "Cover Letter"}`
-  promoteDialog.submitting = false
-  promoteDialog.open = true
+      : application.cover_letter_version;
+  if (!path) return;
+  promoteDialog.application = application;
+  promoteDialog.artifactPath = path;
+  promoteDialog.documentType =
+    artifactKind === "resume" ? "resume" : "cover_letter";
+  promoteDialog.displayName = `${application.job.company} – ${artifactKind === "resume" ? "Resume" : "Cover Letter"}`;
+  promoteDialog.submitting = false;
+  promoteDialog.open = true;
 }
 
 function closePromoteDialog() {
-  promoteDialog.open = false
-  promoteDialog.application = null
+  promoteDialog.open = false;
+  promoteDialog.application = null;
 }
 
 async function confirmPromote() {
-  if (!promoteDialog.application || !promoteDialog.artifactPath) return
-  promoteDialog.submitting = true
-  state.message = ""
-  state.messageVariant = "info"
+  if (!promoteDialog.application || !promoteDialog.artifactPath) return;
+  promoteDialog.submitting = true;
+  state.message = "";
+  state.messageVariant = "info";
   try {
     const result = await api.promoteArtifactToLibrary({
       artifactPath: promoteDialog.artifactPath,
       documentType: promoteDialog.documentType,
       displayName: promoteDialog.displayName.trim() || "Untitled",
-      applicationId: promoteDialog.application.id,
-    })
+      applicationId: promoteDialog.application.id
+    });
     state.message =
       result.status === "exists"
         ? "That file is already in your library."
-        : "Saved to your library."
-    state.messageVariant = "success"
-    closePromoteDialog()
+        : "Saved to your library.";
+    state.messageVariant = "success";
+    closePromoteDialog();
   } catch (err) {
-    state.message = err?.message || "Couldn't save to library."
-    state.messageVariant = "error"
+    state.message = err?.message || "Couldn't save to library.";
+    state.messageVariant = "error";
   } finally {
-    promoteDialog.submitting = false
+    promoteDialog.submitting = false;
   }
 }
 
 async function submitPausedApplication(application) {
-  state.pausedSubmittingId = application.id
-  state.message = ""
-  state.messageVariant = "info"
+  state.pausedSubmittingId = application.id;
+  state.message = "";
+  state.messageVariant = "info";
   try {
-    const result = await api.submitApplication(application.id)
-    state.message = result.message || "Submitted."
-    state.messageVariant = "success"
-    await refresh()
+    const result = await api.submitApplication(application.id);
+    state.message = result.message || "Submitted.";
+    state.messageVariant = "success";
+    await refresh();
   } catch (err) {
-    state.message = err?.message || "Couldn't submit."
-    state.messageVariant = "error"
+    state.message = err?.message || "Couldn't submit.";
+    state.messageVariant = "error";
   } finally {
-    state.pausedSubmittingId = ""
+    state.pausedSubmittingId = "";
   }
 }
 
 function openDiscardDialog(application) {
-  discardDialog.application = application
-  discardDialog.reason = ""
-  discardDialog.open = true
+  discardDialog.application = application;
+  discardDialog.reason = "";
+  discardDialog.open = true;
 }
 
 function closeDiscardDialog() {
-  discardDialog.open = false
-  discardDialog.application = null
-  discardDialog.reason = ""
+  discardDialog.open = false;
+  discardDialog.application = null;
+  discardDialog.reason = "";
 }
 
 async function confirmDiscard() {
-  const application = discardDialog.application
-  if (!application) return
-  state.pausedDiscardingId = application.id
-  state.message = ""
-  state.messageVariant = "info"
+  const application = discardDialog.application;
+  if (!application) return;
+  state.pausedDiscardingId = application.id;
+  state.message = "";
+  state.messageVariant = "info";
   try {
-    await api.discardApplication(application.id, discardDialog.reason.trim())
-    state.message = `Discarded the application to ${application.job.company}.`
-    state.messageVariant = "success"
-    closeDiscardDialog()
-    await refresh()
+    await api.discardApplication(application.id, discardDialog.reason.trim());
+    state.message = `Discarded the application to ${application.job.company}.`;
+    state.messageVariant = "success";
+    closeDiscardDialog();
+    await refresh();
   } catch (err) {
-    state.message = err?.message || "Couldn't discard this application."
-    state.messageVariant = "error"
+    state.message = err?.message || "Couldn't discard this application.";
+    state.messageVariant = "error";
   } finally {
-    state.pausedDiscardingId = ""
+    state.pausedDiscardingId = "";
   }
 }
 
 function jobUrl(application) {
-  return application?.job?.application_url || ""
+  return application?.job?.application_url || "";
 }
 
 function pausedFieldSummary(application) {
-  if (!application.fields_total) return ""
-  return `${application.fields_filled || 0} of ${application.fields_total} fields filled`
+  if (!application.fields_total) return "";
+  return `${application.fields_filled || 0} of ${application.fields_total} fields filled`;
 }
 
 const fillDetailsDialog = reactive({
   open: false,
-  application: null,
-})
+  application: null
+});
 
 function openFillDetailsDialog(application) {
   // Allow opening even when the backend has not recorded per-field
   // details yet -- the dialog will tell the user "no detail available"
   // instead, which is more useful than the badge silently doing nothing.
-  fillDetailsDialog.application = application
-  fillDetailsDialog.open = true
+  fillDetailsDialog.application = application;
+  fillDetailsDialog.open = true;
 }
 
 function closeFillDetailsDialog() {
-  fillDetailsDialog.open = false
-  fillDetailsDialog.application = null
+  fillDetailsDialog.open = false;
+  fillDetailsDialog.application = null;
 }
 
 function applicationFillDetails(application) {
   const raw = Array.isArray(application?.fill_details)
     ? application.fill_details
-    : []
+    : [];
   return raw.map((entry, idx) => ({
     key: `${idx}-${entry?.label || entry?.data_key || idx}`,
     label: entry?.label || "(no label detected)",
@@ -425,152 +443,159 @@ function applicationFillDetails(application) {
     filled: Boolean(entry?.filled),
     error: entry?.error || "",
     required: Boolean(entry?.required),
-    fieldType: entry?.field_type || "",
-  }))
+    fieldType: entry?.field_type || ""
+  }));
 }
 
 function artifactUrl(path) {
-  return api.artifactDownloadUrl(path)
+  return api.artifactDownloadUrl(path);
 }
 
 function pausedArtifactList(application) {
-  const items = []
+  const items = [];
   if (application.resume_version) {
-    items.push({ label: "Resume", path: application.resume_version })
+    items.push({ label: "Resume", path: application.resume_version });
   }
   if (application.cover_letter_version) {
-    items.push({ label: "Cover Letter", path: application.cover_letter_version })
+    items.push({
+      label: "Cover Letter",
+      path: application.cover_letter_version
+    });
   }
-  const shots = application.screenshot_paths || []
+  const shots = application.screenshot_paths || [];
   shots.forEach((path, index) => {
-    items.push({ label: `Screenshot ${index + 1}`, path })
-  })
-  return items
+    items.push({ label: `Screenshot ${index + 1}`, path });
+  });
+  return items;
 }
 
 function toggleSelected(entry) {
-  const next = new Set(state.selected)
-  if (next.has(entry.id)) next.delete(entry.id)
-  else next.add(entry.id)
-  state.selected = next
+  const next = new Set(state.selected);
+  if (next.has(entry.id)) next.delete(entry.id);
+  else next.add(entry.id);
+  state.selected = next;
 }
 
 function clearSelection() {
-  state.selected = new Set()
+  state.selected = new Set();
 }
 
 function selectAllPending() {
-  state.selected = new Set(selectableEntries.value.map((e) => e.id))
+  state.selected = new Set(selectableEntries.value.map((e) => e.id));
 }
 
 async function approveOne(entry) {
-  await runAction(() => api.reviewApprove(entry.id, { reviewer: "operator" }))
+  await runAction(() => api.reviewApprove(entry.id, { reviewer: "operator" }));
 }
 
 async function rejectOne(entry) {
-  await runAction(() => api.reviewReject(entry.id, { reviewer: "operator" }))
+  await runAction(() => api.reviewReject(entry.id, { reviewer: "operator" }));
 }
 
 async function refreshOne(entry) {
-  await runAction(() => api.reviewRefresh(entry.id, { reviewer: "operator" }))
+  await runAction(() => api.reviewRefresh(entry.id, { reviewer: "operator" }));
 }
 
 async function submitOne(entry) {
-  state.pendingAction = true
-  state.message = ""
-  state.messageVariant = "info"
+  state.pendingAction = true;
+  state.message = "";
+  state.messageVariant = "info";
   try {
-    const result = await api.reviewSubmit(entry.id, { reviewer: "operator" })
+    const result = await api.reviewSubmit(entry.id, { reviewer: "operator" });
     if (result.ok) {
-      state.message = "Submitted."
-      state.messageVariant = "success"
+      state.message = "Submitted.";
+      state.messageVariant = "success";
     } else {
-      const action = result.gate?.action || "blocked"
+      const action = result.gate?.action || "blocked";
       const reason =
         GATE_MESSAGES[action] ||
         result.gate?.reason ||
-        "Submission was blocked."
-      state.message = reason
-      state.messageVariant = "error"
+        "Submission was blocked.";
+      state.message = reason;
+      state.messageVariant = "error";
     }
-    await refresh()
+    await refresh();
   } catch (err) {
-    state.message = err?.message || "Submit failed"
-    state.messageVariant = "error"
+    state.message = err?.message || "Submit failed";
+    state.messageVariant = "error";
   } finally {
-    state.pendingAction = false
+    state.pendingAction = false;
   }
 }
 
 async function bulkApprove() {
-  if (!state.selected.size) return
+  if (!state.selected.size) return;
   await runBulk(() =>
-    api.reviewBulkApprove([...state.selected], { reviewer: "operator" }),
-  )
+    api.reviewBulkApprove([...state.selected], { reviewer: "operator" })
+  );
 }
 
 async function bulkReject() {
-  if (!state.selected.size) return
+  if (!state.selected.size) return;
   await runBulk(() =>
-    api.reviewBulkReject([...state.selected], { reviewer: "operator" }),
-  )
+    api.reviewBulkReject([...state.selected], { reviewer: "operator" })
+  );
 }
 
 async function bulkRejectByFilter() {
-  const payload = { reviewer: "operator" }
-  if (state.filterCompany) payload.company = state.filterCompany
-  if (state.filterTitle) payload.keyword_in_title = state.filterTitle
+  const payload = { reviewer: "operator" };
+  if (state.filterCompany) payload.company = state.filterCompany;
+  if (state.filterTitle) payload.keyword_in_title = state.filterTitle;
   if (!payload.company && !payload.keyword_in_title) {
-    state.message = "Enter a company or title keyword to skip matching jobs."
-    state.messageVariant = "info"
-    return
+    state.message = "Enter a company or title keyword to skip matching jobs.";
+    state.messageVariant = "info";
+    return;
   }
-  await runBulk(() => api.reviewBulkRejectByFilter(payload))
-  state.filterCompany = ""
-  state.filterTitle = ""
+  await runBulk(() => api.reviewBulkRejectByFilter(payload));
+  state.filterCompany = "";
+  state.filterTitle = "";
 }
 
 async function runAction(fn) {
-  state.pendingAction = true
-  state.message = ""
-  state.messageVariant = "info"
+  state.pendingAction = true;
+  state.message = "";
+  state.messageVariant = "info";
   try {
-    await fn()
-    await refresh()
+    await fn();
+    await refresh();
   } catch (err) {
-    state.message = err?.message || "Action failed"
-    state.messageVariant = "error"
+    state.message = err?.message || "Action failed";
+    state.messageVariant = "error";
   } finally {
-    state.pendingAction = false
+    state.pendingAction = false;
   }
 }
 
 async function runBulk(fn) {
-  state.pendingAction = true
-  state.message = ""
-  state.messageVariant = "info"
+  state.pendingAction = true;
+  state.message = "";
+  state.messageVariant = "info";
   try {
-    const result = await fn()
-    const ok = (result?.succeeded || []).length
-    const failed = (result?.failed || []).length
+    const result = await fn();
+    const ok = (result?.succeeded || []).length;
+    const failed = (result?.failed || []).length;
     if (failed) {
-      state.message = `${ok} updated, ${failed} couldn't be updated.`
-      state.messageVariant = "error"
+      state.message = `${ok} updated, ${failed} couldn't be updated.`;
+      state.messageVariant = "error";
     } else {
-      state.message = `${ok} updated.`
-      state.messageVariant = "success"
+      state.message = `${ok} updated.`;
+      state.messageVariant = "success";
     }
-    clearSelection()
-    await refresh()
+    clearSelection();
+    await refresh();
   } catch (err) {
-    state.message = err?.message || "Bulk action failed"
-    state.messageVariant = "error"
+    state.message = err?.message || "Bulk action failed";
+    state.messageVariant = "error";
   } finally {
-    state.pendingAction = false
+    state.pendingAction = false;
   }
 }
 
-onMounted(refresh)
+async function appliedOne(entry) {
+  await runAction(() => api.reviewApplied(entry.id, { reviewer: "operator" }));
+}
+
+onMounted(refresh);
 </script>
 
 <template>
@@ -579,7 +604,8 @@ onMounted(refresh)
       <div>
         <h2 class="text-xl font-semibold">Awaiting your review</h2>
         <p class="text-sm text-muted-foreground">
-          AutoApply has these applications ready. Approve to submit them, or skip the ones you don't want.
+          AutoApply has these applications ready. Approve to submit them, or
+          skip the ones you don't want.
         </p>
       </div>
       <Button variant="outline" :disabled="state.loading" @click="refresh">
@@ -601,7 +627,11 @@ onMounted(refresh)
     <Alert
       v-if="state.message"
       :variant="state.messageVariant === 'error' ? 'destructive' : 'default'"
-      :class="state.messageVariant === 'success' ? 'border-primary/40 bg-primary/5' : ''"
+      :class="
+        state.messageVariant === 'success'
+          ? 'border-primary/40 bg-primary/5'
+          : ''
+      "
     >
       <AlertDescription>{{ state.message }}</AlertDescription>
     </Alert>
@@ -611,10 +641,13 @@ onMounted(refresh)
         <CardTitle class="flex items-center gap-2 text-sm">
           <PauseCircle class="h-4 w-4 text-muted-foreground" />
           Paused mid-application
-          <Badge variant="secondary">{{ state.pausedApplications.length }}</Badge>
+          <Badge variant="secondary">{{
+            state.pausedApplications.length
+          }}</Badge>
         </CardTitle>
         <p class="text-xs text-muted-foreground">
-          You started applying to these directly. AutoApply filled them out and paused right before submitting so you could give the green light.
+          You started applying to these directly. AutoApply filled them out and
+          paused right before submitting so you could give the green light.
         </p>
       </CardHeader>
       <CardContent class="space-y-3">
@@ -624,11 +657,15 @@ onMounted(refresh)
           class="rounded-md border p-3 flex flex-col gap-3 md:flex-row md:items-start md:justify-between"
         >
           <div class="min-w-0 space-y-1">
-            <div class="font-medium truncate">{{ application.job.company }}</div>
+            <div class="font-medium truncate">
+              {{ application.job.company }}
+            </div>
             <div class="text-sm text-muted-foreground truncate">
               {{ application.job.title }}
             </div>
-            <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <div
+              class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground"
+            >
               <button
                 v-if="pausedFieldSummary(application)"
                 type="button"
@@ -643,7 +680,10 @@ onMounted(refresh)
               </span>
               <span>Started {{ formatDate(application.created_at) }}</span>
             </div>
-            <div v-if="pausedArtifactList(application).length" class="space-y-1 text-xs">
+            <div
+              v-if="pausedArtifactList(application).length"
+              class="space-y-1 text-xs"
+            >
               <div class="flex flex-wrap gap-x-3 gap-y-1">
                 <a
                   v-for="item in pausedArtifactList(application)"
@@ -652,7 +692,8 @@ onMounted(refresh)
                   :href="artifactUrl(item.path)"
                   target="_blank"
                   rel="noopener"
-                >{{ item.label }}</a>
+                  >{{ item.label }}</a
+                >
               </div>
               <div class="flex flex-wrap gap-2 pt-1">
                 <button
@@ -693,7 +734,10 @@ onMounted(refresh)
             <Button
               size="sm"
               variant="outline"
-              :disabled="state.pausedSubmittingId === application.id || state.pausedDiscardingId === application.id"
+              :disabled="
+                state.pausedSubmittingId === application.id ||
+                state.pausedDiscardingId === application.id
+              "
               @click="openReplaceDialog(application)"
             >
               <Wand2 class="h-4 w-4" />
@@ -703,7 +747,10 @@ onMounted(refresh)
               size="sm"
               variant="outline"
               class="text-destructive hover:bg-destructive/10 hover:text-destructive"
-              :disabled="state.pausedDiscardingId === application.id || state.pausedSubmittingId === application.id"
+              :disabled="
+                state.pausedDiscardingId === application.id ||
+                state.pausedSubmittingId === application.id
+              "
               @click="openDiscardDialog(application)"
             >
               <Trash2 class="h-4 w-4" />
@@ -711,7 +758,10 @@ onMounted(refresh)
             </Button>
             <Button
               size="sm"
-              :disabled="state.pausedSubmittingId === application.id || state.pausedDiscardingId === application.id"
+              :disabled="
+                state.pausedSubmittingId === application.id ||
+                state.pausedDiscardingId === application.id
+              "
               @click="submitPausedApplication(application)"
             >
               <UploadCloud class="h-4 w-4" />
@@ -722,7 +772,13 @@ onMounted(refresh)
       </CardContent>
     </Card>
 
-    <div v-if="!state.loading && !state.pausedApplications.length && !state.entries.length">
+    <div
+      v-if="
+        !state.loading &&
+        !state.pausedApplications.length &&
+        !state.entries.length
+      "
+    >
       <Card>
         <CardContent class="py-12">
           <EmptyState
@@ -735,10 +791,15 @@ onMounted(refresh)
       </Card>
     </div>
 
-    <Card v-if="state.entries.length && (counts.selected || selectableEntries.length)">
+    <Card
+      v-if="
+        state.entries.length && (counts.selected || selectableEntries.length)
+      "
+    >
       <CardContent class="py-3 flex flex-wrap items-center gap-2">
         <Badge variant="secondary">
-          {{ counts.selected }} selected · {{ selectableEntries.length }} can act on
+          {{ counts.selected }} selected · {{ selectableEntries.length }} can
+          act on
         </Badge>
         <Button
           size="sm"
@@ -808,7 +869,10 @@ onMounted(refresh)
       </CardContent>
     </Card>
 
-    <Dialog :open="discardDialog.open" @update:open="(value) => !value && closeDiscardDialog()">
+    <Dialog
+      :open="discardDialog.open"
+      @update:open="(value) => !value && closeDiscardDialog()"
+    >
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Discard this application?</DialogTitle>
@@ -818,7 +882,9 @@ onMounted(refresh)
               {{ discardDialog.application.job.company }}
             </span>
             <span class="mt-2 block text-xs text-muted-foreground">
-              The application won't be submitted. The materials AutoApply already generated stay on disk so you can refer back to them, but this row will move to your history as discarded.
+              The application won't be submitted. The materials AutoApply
+              already generated stay on disk so you can refer back to them, but
+              this row will move to your history as discarded.
             </span>
           </DialogDescription>
         </DialogHeader>
@@ -847,13 +913,18 @@ onMounted(refresh)
             @click="confirmDiscard"
           >
             <Trash2 class="h-4 w-4" />
-            {{ state.pausedDiscardingId ? "Discarding…" : "Discard application" }}
+            {{
+              state.pausedDiscardingId ? "Discarding…" : "Discard application"
+            }}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
 
-    <Dialog :open="replaceDialog.open" @update:open="(v) => !v && closeReplaceDialog()">
+    <Dialog
+      :open="replaceDialog.open"
+      @update:open="(v) => !v && closeReplaceDialog()"
+    >
       <DialogContent class="max-w-lg">
         <DialogHeader>
           <DialogTitle>Replace materials</DialogTitle>
@@ -863,14 +934,18 @@ onMounted(refresh)
               {{ replaceDialog.application.job.company }}
             </span>
             <span class="mt-2 block text-xs text-muted-foreground">
-              Generates a new resume or cover letter for this application. The old artifact stays on disk for audit; this just changes which file the application points at.
+              Generates a new resume or cover letter for this application. The
+              old artifact stays on disk for audit; this just changes which file
+              the application points at.
             </span>
           </DialogDescription>
         </DialogHeader>
 
         <div class="space-y-3 text-sm">
           <label class="space-y-1.5 block">
-            <span class="text-xs font-medium text-muted-foreground">Which material?</span>
+            <span class="text-xs font-medium text-muted-foreground"
+              >Which material?</span
+            >
             <AppSelect
               v-model="replaceDialog.materialType"
               :options="REPLACE_MATERIAL_TYPE_OPTIONS"
@@ -879,7 +954,9 @@ onMounted(refresh)
           </label>
 
           <label class="space-y-1.5 block">
-            <span class="text-xs font-medium text-muted-foreground">Strategy</span>
+            <span class="text-xs font-medium text-muted-foreground"
+              >Strategy</span
+            >
             <AppSelect
               v-model="replaceDialog.strategy"
               :options="REPLACE_STRATEGY_OPTIONS"
@@ -887,8 +964,13 @@ onMounted(refresh)
             />
           </label>
 
-          <label v-if="replaceDialog.strategy === 'regenerate'" class="space-y-1.5 block">
-            <span class="text-xs font-medium text-muted-foreground">Template</span>
+          <label
+            v-if="replaceDialog.strategy === 'regenerate'"
+            class="space-y-1.5 block"
+          >
+            <span class="text-xs font-medium text-muted-foreground"
+              >Template</span
+            >
             <AppSelect
               v-model="replaceDialog.templateId"
               :options="replaceTemplateOptions()"
@@ -897,7 +979,9 @@ onMounted(refresh)
           </label>
 
           <label v-else class="space-y-1.5 block">
-            <span class="text-xs font-medium text-muted-foreground">Library document</span>
+            <span class="text-xs font-medium text-muted-foreground"
+              >Library document</span
+            >
             <AppSelect
               v-model="replaceDialog.sourceDocumentId"
               :options="replaceDocumentOptions()"
@@ -907,13 +991,12 @@ onMounted(refresh)
               v-if="replaceDialog.strategy === 'use_library'"
               class="text-xs text-muted-foreground"
             >
-              The selected document is attached to this application as-is. No LLM, no template, no edits.
+              The selected document is attached to this application as-is. No
+              LLM, no template, no edits.
             </span>
-            <span
-              v-else
-              class="text-xs text-muted-foreground"
-            >
-              Patching works for DOCX resumes today. LaTeX or PDF sources will fall back to regenerate with a warning.
+            <span v-else class="text-xs text-muted-foreground">
+              Patching works for DOCX resumes today. LaTeX or PDF sources will
+              fall back to regenerate with a warning.
             </span>
           </label>
 
@@ -925,40 +1008,51 @@ onMounted(refresh)
             v-if="replaceDialog.strategy === 'patch_existing'"
             class="space-y-3 rounded-md border border-dashed bg-muted/30 p-3"
           >
-            <div class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <div
+              class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+            >
               Patch behaviour (override defaults for this run)
             </div>
             <label class="space-y-1.5 block">
-              <span class="text-xs font-medium text-muted-foreground">Rewrite intensity</span>
+              <span class="text-xs font-medium text-muted-foreground"
+                >Rewrite intensity</span
+              >
               <AppSelect
                 v-model="replaceDialog.patchAggressiveness"
                 :options="[
                   { value: null, label: 'Inherit from Settings' },
-                  ...PATCH_AGGRESSIVENESS_OPTIONS,
+                  ...PATCH_AGGRESSIVENESS_OPTIONS
                 ]"
                 aria-label="Bullet rewrite intensity for this regeneration"
               />
             </label>
             <label class="space-y-1.5 block">
-              <span class="text-xs font-medium text-muted-foreground">Allow re-ordering sections</span>
+              <span class="text-xs font-medium text-muted-foreground"
+                >Allow re-ordering sections</span
+              >
               <AppSelect
                 v-model="replaceDialog.patchAllowReorderSections"
                 :options="[
                   { value: null, label: 'Inherit from Settings' },
                   { value: true, label: 'Yes — let sections re-order' },
-                  { value: false, label: 'No — keep source section order' },
+                  { value: false, label: 'No — keep source section order' }
                 ]"
                 aria-label="Allow re-ordering sections for this regeneration"
               />
             </label>
             <label class="space-y-1.5 block">
-              <span class="text-xs font-medium text-muted-foreground">Allow adding/removing bullets</span>
+              <span class="text-xs font-medium text-muted-foreground"
+                >Allow adding/removing bullets</span
+              >
               <AppSelect
                 v-model="replaceDialog.patchAllowAddRemoveBullets"
                 :options="[
                   { value: null, label: 'Inherit from Settings' },
-                  { value: true, label: 'Yes — add or blank bullets as needed' },
-                  { value: false, label: 'No — preserve source bullet count' },
+                  {
+                    value: true,
+                    label: 'Yes — add or blank bullets as needed'
+                  },
+                  { value: false, label: 'No — preserve source bullet count' }
                 ]"
                 aria-label="Allow adding or removing bullets for this regeneration"
               />
@@ -972,39 +1066,57 @@ onMounted(refresh)
         </Alert>
 
         <DialogFooter>
-          <Button variant="outline" :disabled="replaceDialog.submitting" @click="closeReplaceDialog">
+          <Button
+            variant="outline"
+            :disabled="replaceDialog.submitting"
+            @click="closeReplaceDialog"
+          >
             Cancel
           </Button>
           <Button
             :disabled="
               replaceDialog.submitting ||
-              (replaceDialog.strategy !== 'regenerate' && !replaceDialog.sourceDocumentId)
+              (replaceDialog.strategy !== 'regenerate' &&
+                !replaceDialog.sourceDocumentId)
             "
             @click="confirmReplace"
           >
-            <Loader2 v-if="replaceDialog.submitting" class="h-4 w-4 animate-spin" />
+            <Loader2
+              v-if="replaceDialog.submitting"
+              class="h-4 w-4 animate-spin"
+            />
             <Sparkles v-else class="h-4 w-4" />
             {{
               replaceDialog.submitting
-                ? (replaceDialog.strategy === 'use_library' ? 'Replacing…' : 'Regenerating…')
-                : (replaceDialog.strategy === 'use_library' ? 'Replace' : 'Regenerate')
+                ? replaceDialog.strategy === "use_library"
+                  ? "Replacing…"
+                  : "Regenerating…"
+                : replaceDialog.strategy === "use_library"
+                  ? "Replace"
+                  : "Regenerate"
             }}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
 
-    <Dialog :open="promoteDialog.open" @update:open="(v) => !v && closePromoteDialog()">
+    <Dialog
+      :open="promoteDialog.open"
+      @update:open="(v) => !v && closePromoteDialog()"
+    >
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Save to your library</DialogTitle>
           <DialogDescription>
-            Copies this generated file into your document library so you can use it as a base
-            for future generations. The application still keeps its own copy.
+            Copies this generated file into your document library so you can use
+            it as a base for future generations. The application still keeps its
+            own copy.
           </DialogDescription>
         </DialogHeader>
         <label class="space-y-1.5 block text-sm">
-          <span class="text-xs font-medium text-muted-foreground">Library name</span>
+          <span class="text-xs font-medium text-muted-foreground"
+            >Library name</span
+          >
           <input
             v-model="promoteDialog.displayName"
             type="text"
@@ -1013,11 +1125,17 @@ onMounted(refresh)
           />
         </label>
         <DialogFooter>
-          <Button variant="outline" :disabled="promoteDialog.submitting" @click="closePromoteDialog">
+          <Button
+            variant="outline"
+            :disabled="promoteDialog.submitting"
+            @click="closePromoteDialog"
+          >
             Cancel
           </Button>
           <Button
-            :disabled="promoteDialog.submitting || !promoteDialog.displayName.trim()"
+            :disabled="
+              promoteDialog.submitting || !promoteDialog.displayName.trim()
+            "
             @click="confirmPromote"
           >
             <BookMarked class="h-4 w-4" />
@@ -1066,7 +1184,8 @@ onMounted(refresh)
                 v-if="entry.score_breakdown?.final_score !== undefined"
                 variant="outline"
               >
-                Match {{ formatPercent(entry.score_breakdown.final_score, "0%") }}
+                Match
+                {{ formatPercent(entry.score_breakdown.final_score, "0%") }}
               </Badge>
             </div>
 
@@ -1104,6 +1223,22 @@ onMounted(refresh)
               >
                 Skip
               </Button>
+              <a
+                class="button compact ghost"
+                :href="jobUrl(entry)"
+                target="_blank"
+                rel="noopener"
+              >
+                View Posting
+              </a>
+              <Button
+                size="sm"
+                variant="outline"
+                :disabled="state.pendingAction"
+                @click="appliedOne(entry)"
+              >
+                Already Applied
+              </Button>
             </div>
             <div v-else-if="col.id === 'approved'" class="flex flex-wrap gap-1">
               <Button
@@ -1122,6 +1257,22 @@ onMounted(refresh)
               >
                 Skip
               </Button>
+              <a
+                class="button ghost compact outline"
+                :href="jobUrl(entry)"
+                target="_blank"
+                rel="noopener"
+              >
+                View Posting
+              </a>
+              <Button
+                size="sm"
+                variant="outline"
+                :disabled="state.pendingAction"
+                @click="appliedOne(entry)"
+              >
+                Already Applied
+              </Button>
             </div>
           </article>
 
@@ -1137,7 +1288,10 @@ onMounted(refresh)
       </Card>
     </div>
 
-    <Dialog :open="fillDetailsDialog.open" @update:open="(v) => !v && closeFillDetailsDialog()">
+    <Dialog
+      :open="fillDetailsDialog.open"
+      @update:open="(v) => !v && closeFillDetailsDialog()"
+    >
       <DialogContent class="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Form-fill details</DialogTitle>
@@ -1146,36 +1300,57 @@ onMounted(refresh)
               {{ fillDetailsDialog.application.job.title }} at
               {{ fillDetailsDialog.application.job.company }} —
               {{ fillDetailsDialog.application.fields_filled || 0 }} of
-              {{ fillDetailsDialog.application.fields_total || 0 }} fields filled.
+              {{ fillDetailsDialog.application.fields_total || 0 }} fields
+              filled.
             </template>
           </DialogDescription>
         </DialogHeader>
         <div class="max-h-[60vh] overflow-y-auto space-y-2">
           <div
-            v-for="entry in applicationFillDetails(fillDetailsDialog.application)"
+            v-for="entry in applicationFillDetails(
+              fillDetailsDialog.application
+            )"
             :key="entry.key"
             class="rounded-md border p-3 text-sm"
-            :class="entry.filled
-              ? 'border-emerald-500/30 bg-emerald-500/5'
-              : entry.error
-                ? 'border-destructive/40 bg-destructive/5'
-                : 'border-amber-500/40 bg-amber-500/5'"
+            :class="
+              entry.filled
+                ? 'border-emerald-500/30 bg-emerald-500/5'
+                : entry.error
+                  ? 'border-destructive/40 bg-destructive/5'
+                  : 'border-amber-500/40 bg-amber-500/5'
+            "
           >
             <div class="flex items-start justify-between gap-2">
               <div class="font-medium text-foreground">
                 {{ entry.label }}
                 <span v-if="entry.required" class="text-destructive">*</span>
               </div>
-              <Badge :variant="entry.filled ? 'success' : entry.error ? 'destructive' : 'warning'">
-                {{ entry.filled ? "Filled" : entry.error ? "Failed" : "Skipped" }}
+              <Badge
+                :variant="
+                  entry.filled
+                    ? 'success'
+                    : entry.error
+                      ? 'destructive'
+                      : 'warning'
+                "
+              >
+                {{
+                  entry.filled ? "Filled" : entry.error ? "Failed" : "Skipped"
+                }}
               </Badge>
             </div>
-            <div v-if="entry.dataKey" class="mt-1 font-mono text-xs text-muted-foreground">
-              maps to: {{ entry.dataKey }}<span v-if="entry.fieldType"> ({{ entry.fieldType }})</span>
+            <div
+              v-if="entry.dataKey"
+              class="mt-1 font-mono text-xs text-muted-foreground"
+            >
+              maps to: {{ entry.dataKey
+              }}<span v-if="entry.fieldType"> ({{ entry.fieldType }})</span>
             </div>
             <div v-if="entry.value !== ''" class="mt-1 text-xs">
               <span class="text-muted-foreground">Value:</span>
-              <span class="ml-1 break-words text-foreground">{{ entry.value }}</span>
+              <span class="ml-1 break-words text-foreground">{{
+                entry.value
+              }}</span>
             </div>
             <div v-else class="mt-1 text-xs text-muted-foreground italic">
               No value attempted (no matching profile field).
@@ -1188,14 +1363,17 @@ onMounted(refresh)
             v-if="!applicationFillDetails(fillDetailsDialog.application).length"
             class="rounded-md border border-dashed p-4 text-sm text-muted-foreground"
           >
-            No per-field details were recorded for this attempt. This usually means the
-            ATS form was never reached (e.g. browser timed out before opening the form)
-            or the application was generated before the form-fill log was added. Check
-            the error log on the row for the broader failure reason.
+            No per-field details were recorded for this attempt. This usually
+            means the ATS form was never reached (e.g. browser timed out before
+            opening the form) or the application was generated before the
+            form-fill log was added. Check the error log on the row for the
+            broader failure reason.
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" @click="closeFillDetailsDialog">Close</Button>
+          <Button variant="outline" @click="closeFillDetailsDialog"
+            >Close</Button
+          >
         </DialogFooter>
       </DialogContent>
     </Dialog>

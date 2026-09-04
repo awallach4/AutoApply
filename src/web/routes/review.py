@@ -34,6 +34,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from src.application.review import (
     approve as approve_entry,
+    mark_submitted,
 )
 from src.application.review import (
     bulk_approve,
@@ -293,6 +294,22 @@ async def reject_route(
             reason=payload.reason,
         )
 
+@router.post("/{entry_id}/applied")
+async def applied_route(
+    entry_id: str, payload: ReviewActionPayload
+) -> dict[str, Any]:
+    factory = get_session_factory()
+    with factory() as session, session.begin():
+        entry = get_entry_db(session, entry_id)
+        if entry is None or entry.tenant_id != _tenant():
+            raise HTTPException(404, "review entry not found")
+        return _wrap_transition(
+            mark_submitted,
+            session,
+            entry_id,
+            reviewer=payload.reviewer,
+            reason=payload.reason,
+        )
 
 @router.post("/{entry_id}/refresh")
 async def refresh_route(
