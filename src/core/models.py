@@ -536,6 +536,7 @@ class ReviewQueueEntry(Base):
     score_breakdown: Mapped[dict | None] = mapped_column(JSONB)
     company: Mapped[str | None] = mapped_column(String(200))
     title: Mapped[str | None] = mapped_column(String(300))
+    application_url: Mapped[str | None] = mapped_column(String(300))
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     decision: Mapped[str | None] = mapped_column(String(40))
     reason: Mapped[str | None] = mapped_column(Text)

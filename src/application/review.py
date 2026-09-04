@@ -62,6 +62,7 @@ class CreateEntryArgs:
     score_breakdown: dict[str, Any] | None
     company: str | None
     title: str | None
+    application_url: str | None
     run_id: str | None = None
 
 
@@ -149,6 +150,7 @@ def create_entry(session: Session, args: CreateEntryArgs) -> ReviewQueueEntry:
         score_breakdown=args.score_breakdown,
         company=args.company,
         title=args.title,
+        application_url=args.application_url,
         status="pending",
     )
     session.add(entry)
