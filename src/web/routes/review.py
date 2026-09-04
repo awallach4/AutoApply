@@ -52,7 +52,7 @@ from src.application.review import (
 )
 from src.core.database import get_session_factory
 from src.review.state_machine import InvalidTransitionError
-from src.infrastructure.db.models import JobSnapshot
+from src.core.models import JobSnapshot
 
 logger = logging.getLogger(__name__)
 
