@@ -591,6 +591,26 @@ async function runBulk(fn) {
   }
 }
 
+function absoluteUrl(url) {
+  if (!url) {
+    return "";
+  }
+  if (url.startsWith("/")) {
+    return `https://www.linkedin.com${url}`;
+  }
+  return url;
+}
+
+function detailUrl(job) {
+  return absoluteUrl(
+    job.raw_data?.detail_url ||
+      job.raw_data?.linkedin_url ||
+      job.raw_data?.linkedin_href ||
+      job.application_url ||
+      ""
+  );
+}
+
 async function appliedOne(entry) {
   await runAction(() => api.reviewApplied(entry.id, { reviewer: "operator" }));
 }
@@ -1225,7 +1245,7 @@ onMounted(refresh);
               </Button>
               <a
                 class="button compact ghost"
-                :href="jobUrl(entry)"
+                :href="detailUrl(entry)"
                 target="_blank"
                 rel="noopener"
               >
@@ -1259,7 +1279,7 @@ onMounted(refresh);
               </Button>
               <a
                 class="button ghost compact outline"
-                :href="jobUrl(entry)"
+                :href="detailUrl(entry)"
                 target="_blank"
                 rel="noopener"
               >

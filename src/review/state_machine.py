@@ -17,7 +17,7 @@ board has fixed columns:
 Allowed transitions, declared as a frozen dict so callers can compare
 their own transition rules to the canonical one without monkey-patching::
 
-    pending   -> approved | rejected | stale
+    pending   -> approved | rejected | stale | submitted
     approved  -> submitted | rejected | stale
     stale     -> pending | rejected
     submitted -> (terminal)
@@ -47,7 +47,7 @@ REVIEW_STATUSES: tuple[ReviewStatus, ...] = (
 # Canonical adjacency map. Read-only by convention -- consumers should
 # call :func:`is_valid_transition` rather than mutating this directly.
 ALLOWED_TRANSITIONS: dict[ReviewStatus, frozenset[ReviewStatus]] = {
-    "pending": frozenset({"approved", "rejected", "stale"}),
+    "pending": frozenset({"approved", "rejected", "stale", "submitted"}),
     "approved": frozenset({"submitted", "rejected", "stale"}),
     "stale": frozenset({"pending", "rejected"}),
     "submitted": frozenset(),
