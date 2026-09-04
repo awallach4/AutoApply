@@ -347,6 +347,15 @@ async def _search_linkedin_with_job_index(
                 force_refresh=force_refresh,
                 freshness_hours=freshness_hours,
             )
+
+            logger.info(
+                "Job Index outcome: source=%s cached=%s stale=%s scraped_jobs=%d postings=%d",
+                ats_source,
+                outcome.cached,
+                outcome.stale,
+                len(scraped_jobs),
+                len(outcome.postings),
+            )
             if scraped_jobs:
                 for job in scraped_jobs:
                     enrich_posting(
@@ -420,11 +429,24 @@ async def _search_ats_with_job_index(
     all_jobs: list = []
     events: list[dict] = []
 
+    logger.info("Job Index companies: %r", companies)
+
     for ats_source, slugs in companies.items():
+
+        logger.info("ATS LOOP START: %s", ats_source)
+
+        logger.info(
+            "Job Index ATS iteration: source=%s slugs=%d",
+            ats_source,
+            len(slugs),
+        )
+
         if not slugs:
+            logger.info("ATS LOOP SKIP: %s has no slugs", ats_source)
             continue
 
         scraped_jobs: list = []
+        logger.info("ATS BEFORE FETCH SETUP: %s", ats_source)
 
         def fetch_and_capture() -> list:
             result = search_ats_jobs(
@@ -437,10 +459,14 @@ async def _search_ats_with_job_index(
             scraped_jobs[:] = list(result)
             return scraped_jobs
 
+        logger.info("ATS BEFORE TRY: %s", ats_source)
+
         try:
             session_factory = get_session_factory(load_config())
             with session_factory() as session, session.begin():
                 store = JobIndexStore(session)
+
+                logger.info("ATS BEFORE CACHED_SEARCH: %s", ats_source)
 
                 outcome = await cached_search(
                     store=store,
@@ -457,7 +483,10 @@ async def _search_ats_with_job_index(
                     freshness_hours=freshness_hours,
                 )
 
+                logger.info("ATS AFTER CACHED_SEARCH: %s", ats_source)
+
                 if scraped_jobs:
+                    logger.info("ATS USING SCRAPED JOBS: %s count=%d", ats_source, len(scraped_jobs))
                     jobs = scraped_jobs
 
                     for item in jobs:
@@ -486,12 +515,19 @@ async def _search_ats_with_job_index(
                             result.content_changed,
                         )
                 else:
+                    logger.info("ATS RECONSTRUCTING FROM INDEXX: %s count=%d",
+                        ats_source,
+                        len(outcome.postings),
+                    )
                     jobs = _raw_jobs_from_index_postings(
                         session,
                         outcome.postings,
                     )
 
+                logger.info("ATS AFTER JOB CONSTRUCTION: %s count=%d", ats_source, len(jobs))
+
                 all_jobs.extend(jobs)
+                logger.info("ATS AFTER ALL_JOBS_EXTEND: %s", ats_source)
 
                 events.append(
                     {
@@ -507,12 +543,18 @@ async def _search_ats_with_job_index(
                         "counts": outcome.counts,
                     }
                 )
+                logger.info("ATS AFTER EVENTS_APPEND: %s", ats_source)
 
         except Exception as exc:
-            logger.warning(
-                "Job Index ATS search failed for %s; falling back to live search: %s",
+      #      logger.warning(
+      #          "Job Index ATS search failed for %s; falling back to live search: %s",
+      #          ats_source,
+      #          exc,
+      #      )
+
+            logger.exception(
+                "Job Index ATS search failed for %s; falling back to live search",
                 ats_source,
-                exc,
             )
 
             # Preserve existing behavior if the Job Index is unavailable.
@@ -542,6 +584,8 @@ async def _search_ats_with_job_index(
                     "counts": {"fallback": len(jobs)},
                 }
             )
+
+        logger.info("ATS LOOP END: %s", ats_source)
 
     return all_jobs, events
 
@@ -658,20 +702,29 @@ def _raw_job_from_index_posting(posting, snapshot):
     ats_type = raw.get("ats_type") or raw.get("source") or posting.source
     source = posting.source if posting.source in ATS_TYPES else "linkedin"
 
+    logger.info(
+        "Reconstructing cached job: source=%s source_id=%s "
+        "raw_location=%r snapshot_location=%r",
+        posting.source,
+        posting.source_id,
+        raw.get("location"),
+        getattr(snapshot, "location", None),
+    )
+
     return RawJob(
-        id=uuid.UUID(raw["id"]) if raw.get("id") else uuid.uuid4(),
+        id=posting.id,
         source=source,
         source_id=posting.source_id,
         company=posting.company,
-        title=raw.get("title") or getattr(snapshot, "title", None) or "Unknown Role",
-        location=raw.get("location") or getattr(snapshot, "location", None),
+        title=getattr(snapshot, "title", None) or raw.get("title") or "Unknown Role",
+        location=getattr(snapshot, "location", None) or raw.get("location"),
         employment_type=employment_type if employment_type in EMPLOYMENT_TYPES else "unknown",
         seniority=seniority if seniority in SENIORITY_LEVELS else "unknown",
-        description=raw.get("description") or getattr(snapshot, "description", None),
+        description=getattr(snapshot, "description", None) or raw.get("description"),
         requirements=requirements,
         application_url=(
-            raw.get("application_url")
-            or getattr(snapshot, "application_url", None)
+            getattr(snapshot, "application_url", None)
+            or raw.get("application_url")
             or posting.canonical_url
         ),
         ats_type=ats_type if ats_type in ATS_TYPES else "unknown",
