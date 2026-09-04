@@ -1723,7 +1723,7 @@ def _build_companies_filter(
     if ats and company:
         return {ats: [company]}
     if company:
-        return {"greenhouse": [company], "lever": [company], "ashby": [company]}
+        return {"greenhouse": [company], "lever": [company], "ashby": [company], "workday": [company]}
     if ats:
         from src.intake.batch import load_company_list
 
@@ -3364,6 +3364,11 @@ def _fetch_job_from_ats(url: str, ats_type: str):
 
             with AshbyScraper() as scraper:
                 return scraper.fetch_job(company_slug, job_id)
+        if ats_type == "workday":
+            from src.intake.workday import WorkdayScraper
+
+            with WorkdayScraper() as scraper:
+                return scraper.fetch_job(company_slug, job_id)
     except Exception as exc:
         logger.warning("Failed to fetch %s job details for %s: %s", ats_type, url, exc)
 
@@ -3386,6 +3391,9 @@ def _parse_ats_job_locator(url: str, ats_type: str) -> tuple[str, str] | None:
         return parts[0], parts[1]
 
     if ats_type == "ashby" and len(parts) >= 2:
+        return parts[0], parts[1]
+
+    if ats_type == "workday" and len(parts) >= 2:
         return parts[0], parts[1]
     return None
 

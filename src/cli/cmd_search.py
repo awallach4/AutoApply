@@ -29,9 +29,9 @@ logger = logging.getLogger("autoapply.cli.search")
     "--source",
     type=click.Choice(["ats", "linkedin", "all"]),
     default="ats",
-    help="Job source: 'ats' (Greenhouse/Lever/Ashby), 'linkedin', or 'all'.",
+    help="Job source: 'ats' (Greenhouse/Lever/Ashby/Workday), 'linkedin', or 'all'.",
 )
-@click.option("--ats", type=click.Choice(["greenhouse", "lever", "ashby"]), help="Only scrape this ATS.")
+@click.option("--ats", type=click.Choice(["greenhouse", "lever", "ashby", "workday"]), help="Only scrape this ATS.")
 @click.option("--company", help="Only scrape this company slug.")
 @click.option("--score", is_flag=True, help="Score and rank results against your profile.")
 @click.option("--keyword", help="LinkedIn search keywords (e.g. 'software engineer intern').")

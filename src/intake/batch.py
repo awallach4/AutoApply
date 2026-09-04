@@ -29,6 +29,7 @@ from src.intake.greenhouse import GreenhouseScraper
 from src.intake.jd_parser import parse_requirements
 from src.intake.lever import LeverScraper
 from src.intake.ashby import AshbyScraper
+from src.intake.workday import WorkdayScraper
 from src.intake.schema import RawJob
 from src.intake.storage import upsert_jobs
 
@@ -74,6 +75,7 @@ def run_intake(
         "greenhouse": GreenhouseScraper,
         "lever": LeverScraper,
         "ashby": AshbyScraper,
+        "workday": WorkdayScraper,
     }
 
     for ats, slugs in companies.items():
