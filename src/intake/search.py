@@ -21,6 +21,7 @@ import logging
 import re
 from pathlib import Path
 
+from src.core.config import PROJECT_ROOT
 from src.intake.base import ScraperError
 from src.intake.batch import enrich_requirements, load_company_list
 from src.intake.filters import load_filter_profiles
@@ -108,20 +109,42 @@ def search_jobs(
             logger.warning("No scraper for ATS '%s'", ats)
             continue
 
-        with scraper_cls() as scraper:
-            for slug in slugs:
-                try:
-                    jobs = scraper.fetch_jobs(slug)
-                    if parse_jds:
-                        jobs = enrich_requirements(jobs, use_llm=use_llm)
-                    all_jobs.extend(jobs)
-                    logger.info("[%s/%s] fetched %d jobs", ats, slug, len(jobs))
-                except ScraperError as e:
-                    logger.error("[%s/%s] %s", ats, slug, e)
-                    errors += 1
-                except Exception as e:
-                    logger.error("[%s/%s] %s", ats, slug, e, exc_info=True)
-                    errors += 1
+        if ats == "workday":
+            from src.intake.filters import load_filter_profiles
+            filters_path = PROJECT_ROOT / "config" / "filters.yaml"
+            filter_profiles = load_filter_profiles(filters_path)
+            active_filter = filter_profiles.get("default")
+
+            with WorkdayScraper(filter_profile=active_filter) as scraper:
+                for slug in slugs:
+                    try:
+                        jobs = scraper.fetch_jobs(slug)
+                        if parse_jds:
+                            jobs = enrich_requirements(jobs, use_llm=use_llm)
+                        all_jobs.extend(jobs)
+                        logger.info("[%s/%s] fetched %d jobs", ats, slug, len(jobs))
+                    except ScraperError as e:
+                        logger.error("[%s/%s] %s", ats, slug, e)
+                        errors += 1
+                    except Exception as e:
+                        logger.error("[%s/%s] %s", ats, slug, e, exc_info=True)
+                        errors += 1
+
+        else:
+            with scraper_cls() as scraper:
+                for slug in slugs:
+                    try:
+                        jobs = scraper.fetch_jobs(slug)
+                        if parse_jds:
+                            jobs = enrich_requirements(jobs, use_llm=use_llm)
+                        all_jobs.extend(jobs)
+                        logger.info("[%s/%s] fetched %d jobs", ats, slug, len(jobs))
+                    except ScraperError as e:
+                        logger.error("[%s/%s] %s", ats, slug, e)
+                        errors += 1
+                    except Exception as e:
+                        logger.error("[%s/%s] %s", ats, slug, e, exc_info=True)
+                        errors += 1
 
     logger.info("Total scraped: %d jobs (%d errors)", len(all_jobs), errors)
 

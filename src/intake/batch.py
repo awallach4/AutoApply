@@ -22,7 +22,7 @@ from pathlib import Path
 import yaml
 from sqlalchemy.orm import Session
 
-from src.core.config import bootstrap_user_configs
+from src.core.config import PROJECT_ROOT, bootstrap_user_configs
 from src.intake.base import ScraperError
 from src.intake.filters import JobFilter
 from src.intake.greenhouse import GreenhouseScraper
@@ -84,41 +84,84 @@ def run_intake(
             logger.warning("No scraper registered for ATS '%s', skipping", ats)
             continue
 
-        with scraper_cls() as scraper:
-            for slug in slugs:
-                try:
-                    jobs = scraper.fetch_jobs(slug)
+        if ats == "workday":
+            from src.intake.filters import load_filter_profiles
+            filters_path = PROJECT_ROOT / "config" / "filters.yaml"
+            filter_profiles = load_filter_profiles(filters_path)
+            active_filter = filter_profiles.get("default")
 
-                    if parse_jds:
-                        jobs = enrich_requirements(jobs, use_llm=use_llm)
+            with WorkdayScraper(filter_profile=active_filter) as scraper:
+                for slug in slugs:
+                    try:
+                        jobs = scraper.fetch_jobs(slug)
+    
+                        if parse_jds:
+                            jobs = enrich_requirements(jobs, use_llm=use_llm)
+    
+                        # Apply filter if provided
+                        filtered_out = 0
+                        if job_filter:
+                            before = len(jobs)
+                            jobs = job_filter.apply(jobs)
+                            filtered_out = before - len(jobs)
+                            totals["filtered"] += filtered_out
+    
+                        inserted, skipped = upsert_jobs(session, jobs)
+                        totals["inserted"] += inserted
+                        totals["skipped"] += skipped
+    
+                        logger.info(
+                            "[%s/%s] +%d new, %d skipped, %d filtered out",
+                            ats,
+                            slug,
+                            inserted,
+                            skipped,
+                            filtered_out,
+                        )
+    
+                    except ScraperError as e:
+                        logger.error("[%s/%s] Scraper error: %s", ats, slug, e)
+                        totals["errors"] += 1
+                    except Exception as e:
+                        logger.error("[%s/%s] Unexpected error: %s", ats, slug, e, exc_info=True)
+                        totals["errors"] += 1
 
-                    # Apply filter if provided
-                    filtered_out = 0
-                    if job_filter:
-                        before = len(jobs)
-                        jobs = job_filter.apply(jobs)
-                        filtered_out = before - len(jobs)
-                        totals["filtered"] += filtered_out
+        else:
+            with scraper_cls() as scraper:
+                for slug in slugs:
+                    try:
+                        jobs = scraper.fetch_jobs(slug)
 
-                    inserted, skipped = upsert_jobs(session, jobs)
-                    totals["inserted"] += inserted
-                    totals["skipped"] += skipped
+                        if parse_jds:
+                            jobs = enrich_requirements(jobs, use_llm=use_llm)
 
-                    logger.info(
-                        "[%s/%s] +%d new, %d skipped, %d filtered out",
-                        ats,
-                        slug,
-                        inserted,
-                        skipped,
-                        filtered_out,
-                    )
+                        # Apply filter if provided
+                        filtered_out = 0
+                        if job_filter:
+                            before = len(jobs)
+                            jobs = job_filter.apply(jobs)
+                            filtered_out = before - len(jobs)
+                            totals["filtered"] += filtered_out
 
-                except ScraperError as e:
-                    logger.error("[%s/%s] Scraper error: %s", ats, slug, e)
-                    totals["errors"] += 1
-                except Exception as e:
-                    logger.error("[%s/%s] Unexpected error: %s", ats, slug, e, exc_info=True)
-                    totals["errors"] += 1
+                        inserted, skipped = upsert_jobs(session, jobs)
+                        totals["inserted"] += inserted
+                        totals["skipped"] += skipped
+
+                        logger.info(
+                            "[%s/%s] +%d new, %d skipped, %d filtered out",
+                            ats,
+                            slug,
+                            inserted,
+                            skipped,
+                            filtered_out,
+                        )
+
+                    except ScraperError as e:
+                        logger.error("[%s/%s] Scraper error: %s", ats, slug, e)
+                        totals["errors"] += 1
+                    except Exception as e:
+                        logger.error("[%s/%s] Unexpected error: %s", ats, slug, e, exc_info=True)
+                        totals["errors"] += 1
 
     return totals
 
