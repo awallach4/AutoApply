@@ -24,8 +24,10 @@ this to the session; today the helper falls back to ``"default"``).
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import logging
 from typing import Any
+import uuid
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -53,7 +55,7 @@ from src.application.review import (
 )
 from src.core.database import get_session_factory
 from src.review.state_machine import InvalidTransitionError
-from src.core.models import Application, JobSnapshot, ReviewQueueEntry
+from src.core.models import Application, Job, JobPosting, JobSnapshot, ReviewQueueEntry
 
 logger = logging.getLogger(__name__)
 
@@ -332,10 +334,7 @@ async def applied_route(
         if entry is None or entry.tenant_id != _tenant():
             raise HTTPException(404, "review entry not found")
 
-        application = _record_manual_application(
-            session,
-            entry,
-        )
+        application = _record_manual_application(session, entry)
 
         result = _wrap_transition(
             mark_submitted,
@@ -354,46 +353,89 @@ def _record_manual_application(
     session: Session,
     entry: ReviewQueueEntry,
 ) -> Application:
-    """Create or update an application recorded as manually submitted."""
-    from datetime import UTC, datetime
+    """Create an Application for a job the user already submitted manually."""
 
-    if entry.job_id is None:
-        raise ValueError("review entry has no job_id")
+    if entry.job_snapshot_id is None:
+        raise ValueError("review entry has no job_snapshot_id")
 
-    application = session.execute(
-        select(Application)
-        .where(Application.tenant_id == entry.tenant_id)
-        .where(Application.job_id == entry.job_id)
-        .order_by(Application.created_at.desc())
+    snapshot = session.get(JobSnapshot, entry.job_snapshot_id)
+    if snapshot is None:
+        raise ValueError(
+            f"job snapshot not found: {entry.job_snapshot_id!r}"
+        )
+
+    posting = session.get(JobPosting, snapshot.posting_id)
+    if posting is None:
+        raise ValueError(
+            f"job posting not found: {snapshot.posting_id!r}"
+        )
+
+    # Find the denormalized Job record using the stable JobPosting identity.
+    job = session.execute(
+        select(Job)
+        .where(Job.tenant_id == entry.tenant_id)
+        .where(Job.source == posting.source)
+        .where(Job.company == posting.company)
+        .where(Job.source_id == posting.source_id)
         .limit(1)
     ).scalar_one_or_none()
 
+    if job is None and snapshot.application_url:
+        job = session.execute(
+            select(Job)
+            .where(Job.tenant_id == entry.tenant_id)
+            .where(Job.application_url == snapshot.application_url)
+            .limit(1)
+        ).scalar_one_or_none()
+
+    # The review entry may reference a Job that has disappeared.
+    # Rebuild the denormalized Job from JobPosting + JobSnapshot.
+    if job is None:
+        job = Job(
+            id=uuid.uuid4(),
+            tenant_id=entry.tenant_id,
+            source=posting.source,
+            source_id=posting.source_id,
+            company=posting.company,
+            title=snapshot.title,
+            location=snapshot.location,
+            employment_type=snapshot.employment_type,
+            seniority=snapshot.seniority,
+            description=snapshot.description,
+            requirements=snapshot.requirements or {},
+            visa_sponsorship=None,
+            ats_type=posting.source,
+            application_url=(
+                snapshot.application_url
+                or posting.canonical_url
+            ),
+            raw_data=snapshot.raw_data or {},
+            discovered_at=snapshot.scraped_at,
+            expires_at=posting.expires_at,
+        )
+        session.add(job)
+        session.flush()
+
     now = datetime.now(UTC)
 
-    if application is None:
-        application = Application(
-            tenant_id=entry.tenant_id,
-            job_id=entry.job_id,
-            job_snapshot_id=entry.job_snapshot_id,
-            status="SUBMITTED",
-            submitted_at=now,
-            state_history=[
-                {
-                    "timestamp": now.isoformat(),
-                    "event": "MANUAL_SUBMISSION",
-                    "from": None,
-                    "to": "SUBMITTED",
-                    "meta": {},
-                }
-            ],
-        )
-        session.add(application)
-    else:
-        application.status = "SUBMITTED"
-        if application.submitted_at is None:
-            application.submitted_at = now
+    application = Application(
+        tenant_id=entry.tenant_id,
+        job_id=job.id,
+        job_snapshot_id=snapshot.id,
+        status="SUBMITTED",
+        submitted_at=now,
+        state_history=[{
+            "timestamp": now.isoformat(),
+            "event": "MANUAL_SUBMISSION",
+            "from": None,
+            "to": "SUBMITTED",
+            "meta": {},
+        }],
+    )
 
+    session.add(application)
     session.flush()
+
     return application
 
 @router.post("/{entry_id}/refresh")
