@@ -194,7 +194,7 @@ class WorkdayScraper(BaseScraper):
             return True
 
         title = str(item.get("title") or "").strip()
-        location = self._extract_location(item).strip()
+        location = _extract_location(item).strip()
 
         # Title include: at least one keyword must occur.
         if profile.title_include:

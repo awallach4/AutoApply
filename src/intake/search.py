@@ -110,7 +110,6 @@ def search_jobs(
             continue
 
         if ats == "workday":
-            from src.intake.filters import load_filter_profiles
             filters_path = PROJECT_ROOT / "config" / "filters.yaml"
             filter_profiles = load_filter_profiles(filters_path)
             active_filter = filter_profiles.get("default")
