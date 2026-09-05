@@ -31,6 +31,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
 from src.application.review import (
     approve as approve_entry,
@@ -52,7 +53,7 @@ from src.application.review import (
 )
 from src.core.database import get_session_factory
 from src.review.state_machine import InvalidTransitionError
-from src.core.models import JobSnapshot
+from src.core.models import Application, JobSnapshot, ReviewQueueEntry
 
 logger = logging.getLogger(__name__)
 
@@ -330,13 +331,70 @@ async def applied_route(
         entry = get_entry_db(session, entry_id)
         if entry is None or entry.tenant_id != _tenant():
             raise HTTPException(404, "review entry not found")
-        return _wrap_transition(
+
+        application = _record_manual_application(
+            session,
+            entry,
+        )
+
+        result = _wrap_transition(
             mark_submitted,
             session,
             entry_id,
             reviewer=payload.reviewer,
             reason=payload.reason,
         )
+
+        return {
+            **result,
+            "application_id": str(application.id),
+        }
+
+def _record_manual_application(
+    session: Session,
+    entry: ReviewQueueEntry,
+) -> Application:
+    """Create or update an application recorded as manually submitted."""
+    from datetime import UTC, datetime
+
+    if entry.job_id is None:
+        raise ValueError("review entry has no job_id")
+
+    application = session.execute(
+        select(Application)
+        .where(Application.tenant_id == entry.tenant_id)
+        .where(Application.job_id == entry.job_id)
+        .order_by(Application.created_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+    now = datetime.now(UTC)
+
+    if application is None:
+        application = Application(
+            tenant_id=entry.tenant_id,
+            job_id=entry.job_id,
+            job_snapshot_id=entry.job_snapshot_id,
+            status="SUBMITTED",
+            submitted_at=now,
+            state_history=[
+                {
+                    "timestamp": now.isoformat(),
+                    "event": "MANUAL_SUBMISSION",
+                    "from": None,
+                    "to": "SUBMITTED",
+                    "meta": {},
+                }
+            ],
+        )
+        session.add(application)
+    else:
+        application.status = "SUBMITTED"
+        if application.submitted_at is None:
+            application.submitted_at = now
+
+    session.flush()
+    return application
 
 @router.post("/{entry_id}/refresh")
 async def refresh_route(
