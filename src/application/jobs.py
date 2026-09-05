@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 from src.application.profile import get_active_profile_path, get_profile_path
 from src.core.config import PROJECT_ROOT, load_config
 from src.core.state_machine import ApplicationState, AppStatus
+from src.intake.filters import load_filter_profiles
 
 logger = logging.getLogger("autoapply.application.jobs")
 
@@ -2164,7 +2165,6 @@ def _score_jobs(jobs, *, warn_on_missing_profile: bool) -> tuple[bool, list[str]
     from src.matching.scorer import build_scoring_context
     from src.matching.scorer import score_jobs as score_ranked_jobs
     from src.memory.profile import load_profile_yaml
-    from src.intake.filters import load_filter_profiles
     from src.matching.rules import load_applicant_context
 
     profile_data = load_profile_yaml(profile_path)
@@ -3366,7 +3366,6 @@ def _fetch_job_from_ats(url: str, ats_type: str):
                 return scraper.fetch_job(company_slug, job_id)
         if ats_type == "workday":
             from src.intake.workday import WorkdayScraper
-            from src.intake.filters import load_filter_profiles
 
             filters_path = PROJECT_ROOT / "config" / "filters.yaml"
             filter_profiles = load_filter_profiles(filters_path)

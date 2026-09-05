@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from src.core.config import PROJECT_ROOT, bootstrap_user_configs
 from src.intake.base import ScraperError
-from src.intake.filters import JobFilter
+from src.intake.filters import JobFilter, load_filter_profiles
 from src.intake.greenhouse import GreenhouseScraper
 from src.intake.jd_parser import parse_requirements
 from src.intake.lever import LeverScraper
@@ -85,7 +85,6 @@ def run_intake(
             continue
 
         if ats == "workday":
-            from src.intake.filters import load_filter_profiles
             filters_path = PROJECT_ROOT / "config" / "filters.yaml"
             filter_profiles = load_filter_profiles(filters_path)
             active_filter = filter_profiles.get("default")

@@ -51,6 +51,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from src.intake.filters import load_filter_profiles
 
 logger = logging.getLogger(__name__)
 
@@ -579,7 +580,6 @@ def _default_score_fn(
     from src.matching.scorer import build_scoring_context  # noqa: PLC0415
     from src.matching.scorer import score_jobs as score_ranked  # noqa: PLC0415
     from src.memory.profile import load_profile_yaml  # noqa: PLC0415
-    from src.intake.filters import load_filter_profiles
     from src.matching.rules import load_applicant_context
     from src.core.config import PROJECT_ROOT
 
