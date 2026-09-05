@@ -331,7 +331,7 @@ class WorkdayScraper(BaseScraper):
     ) -> dict:
         """Fetch a single public Workday job detail response."""
         external_path = external_path.lstrip("/")
-        url = f"{base_url}/wday/cxs/{tenant}/{site}{external_path}"
+        url = f"{base_url}/wday/cxs/{tenant}/{site}/{external_path.lstrip('/')}"
 
         try:
             response = self._client.get(url)
