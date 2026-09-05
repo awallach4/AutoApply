@@ -20,7 +20,8 @@ from __future__ import annotations
 import logging
 from urllib.parse import urlparse
 
-from src.intake.base import BaseScraper, ScraperError
+from src.intake.base import DEFAULT_TIMEOUT, BaseScraper, ScraperError
+from src.intake.filters import JobFilter
 from src.intake.html_utils import strip_html
 from src.intake.schema import RawJob, classify_employment_type, classify_seniority
 
@@ -32,6 +33,15 @@ MAX_PAGES = 500
 
 class WorkdayScraper(BaseScraper):
     """Scraper for public Workday career sites."""
+
+    def __init__(
+        self,
+        *,
+        filter_profile: JobFilter | None = None,
+        timeout: int = DEFAULT_TIMEOUT,
+    ):
+        super().__init__(timeout=timeout)
+        self._filter_profile = filter_profile
 
     source_name = "workday"
 
@@ -79,6 +89,9 @@ class WorkdayScraper(BaseScraper):
                 if not isinstance(item, dict):
                     continue
 
+                if not self._passes_prefilter(item):
+                    continue
+
                 try:
                     jobs.append(
                         self._parse_job(
@@ -89,6 +102,7 @@ class WorkdayScraper(BaseScraper):
                             item=item,
                         )
                     )
+
                 except Exception as e:
                     logger.warning(
                         "Skipping malformed Workday job %s: %s",
@@ -168,6 +182,44 @@ class WorkdayScraper(BaseScraper):
             )
 
         return data
+
+    def _passes_prefilter(self, item: dict) -> bool:
+        """Apply filters that can be evaluated from Workday listing data.
+
+        This must be conservative: incomplete listing data should not cause
+        a job to be rejected unless the available data clearly fails a filter.
+        """
+        profile = self._filter_profile
+        if profile is None:
+            return True
+
+        title = str(item.get("title") or "").strip()
+        location = self._extract_location(item).strip()
+
+        # Title include: at least one keyword must occur.
+        if profile.title_include:
+            title_lower = title.lower()
+            if not any(keyword.lower() in title_lower
+                    for keyword in profile.title_include):
+                return False
+
+        # Title exclude: any matching keyword rejects the job.
+        if profile.title_exclude:
+            title_lower = title.lower()
+            if any(keyword.lower() in title_lower
+                for keyword in profile.title_exclude):
+                return False
+
+        # Location: at least one configured location must match.
+        if profile.locations:
+            location_lower = location.lower()
+            if not any(
+                rule.name.lower() in location_lower
+                for rule in profile.locations
+            ):
+                return False
+
+        return True
 
     def _parse_job(
         self,
