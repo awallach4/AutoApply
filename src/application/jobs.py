@@ -3366,8 +3366,13 @@ def _fetch_job_from_ats(url: str, ats_type: str):
                 return scraper.fetch_job(company_slug, job_id)
         if ats_type == "workday":
             from src.intake.workday import WorkdayScraper
+            from src.intake.filters import load_filter_profiles
 
-            with WorkdayScraper() as scraper:
+            filters_path = PROJECT_ROOT / "config" / "filters.yaml"
+            filter_profiles = load_filter_profiles(filters_path)
+            active_filter = filter_profiles.get("default")
+
+            with WorkdayScraper(filter_profile=active_filter) as scraper:
                 return scraper.fetch_job(company_slug, job_id)
     except Exception as exc:
         logger.warning("Failed to fetch %s job details for %s: %s", ats_type, url, exc)
