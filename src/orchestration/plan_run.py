@@ -818,8 +818,12 @@ def _create_review_entries(
     return entry_ids
 
 
-def _drop_previously_applied(*, tenant_id: str, selected: list[Any]) -> list[Any]:
-    """Remove jobs that already have an application record for this tenant."""
+def _drop_previously_applied(
+    *,
+    tenant_id: str,
+    selected: list[Any],
+) -> list[Any]:
+    """Remove jobs that already have a non-failed application record."""
     if not selected:
         return []
 
@@ -831,20 +835,33 @@ def _drop_previously_applied(*, tenant_id: str, selected: list[Any]) -> list[Any
     from src.core.models import Application  # noqa: PLC0415
 
     job_ids: list[uuid_mod.UUID] = []
-    by_uuid: dict[uuid_mod.UUID, Any] = {}
+    snapshot_ids: list[uuid_mod.UUID] = []
+    by_job_uuid: dict[uuid_mod.UUID, Any] = {}
+
     for breakdown in selected:
         try:
             job_uuid = uuid_mod.UUID(str(getattr(breakdown, "job_id", "")))
         except ValueError:
             continue
+
         job_ids.append(job_uuid)
-        by_uuid[job_uuid] = breakdown
+        by_job_uuid[job_uuid] = breakdown
+
+        try:
+            snapshot_uuid = uuid_mod.UUID(
+                str(getattr(breakdown, "job_snapshot_id", ""))
+            )
+        except ValueError:
+            continue
+
+        snapshot_ids.append(snapshot_uuid)
+
     if not job_ids:
         return selected
 
     factory = get_session_factory()
     with factory() as session:
-        existing = set(
+        existing_job_ids = set(
             session.execute(
                 select(Application.job_id).where(
                     Application.tenant_id == tenant_id,
@@ -853,7 +870,26 @@ def _drop_previously_applied(*, tenant_id: str, selected: list[Any]) -> list[Any
                 )
             ).scalars()
         )
-    return [bd for job_id, bd in by_uuid.items() if job_id not in existing]
+
+        existing_snapshot_ids = set()
+        if snapshot_ids:
+            existing_snapshot_ids = set(
+                session.execute(
+                    select(Application.job_snapshot_id).where(
+                        Application.tenant_id == tenant_id,
+                        Application.job_snapshot_id.in_(snapshot_ids),
+                        Application.status != "FAILED",
+                    )
+                ).scalars()
+            )
+
+    return [
+        bd
+        for job_id, bd in by_job_uuid.items()
+        if job_id not in existing_job_ids
+        and uuid_mod.UUID(str(getattr(bd, "job_snapshot_id", "")))
+        not in existing_snapshot_ids
+    ]
 
 def _drop_already_pending_review(
     *,
