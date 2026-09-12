@@ -7,6 +7,7 @@ import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 import webbrowser
 from pathlib import Path
@@ -287,6 +288,36 @@ def _stop_children(children: list[subprocess.Popen[str]]) -> None:
             child.kill()
 
 
+def _monitor_children(
+    children: list[subprocess.Popen[str]],
+    child_specs: dict[int, tuple[str, list[str], dict[str, str]]],
+    stop_event: threading.Event,
+) -> None:
+    """Restart worker/Beat children if they exit unexpectedly."""
+    restart_delay = 2.0
+
+    while not stop_event.wait(2):
+        for index, child in enumerate(children):
+            if child.poll() is None:
+                continue
+
+            spec = child_specs.get(index)
+            if spec is None:
+                continue
+
+            label, args, env = spec
+            click.secho(
+                f"{label} exited with code {child.returncode}; restarting...",
+                fg="yellow",
+            )
+
+            time.sleep(restart_delay)
+            if stop_event.is_set():
+                return
+
+            children[index] = _start_child(label, args, env=env)
+
+
 @click.command("start")
 @click.option("--host", default="127.0.0.1", help="Web bind host.")
 @click.option("--port", default=8000, type=int, help="Web bind port.")
@@ -409,11 +440,29 @@ def start_cmd(
         _run(migrate_args, env=env)
 
     children: list[subprocess.Popen[str]] = []
+    child_specs: dict[int, tuple[str, list[str], dict[str, str]]] = {}
+    stop_event = threading.Event()
+    monitor_thread: threading.Thread | None = None
+
     try:
         if not no_worker:
+            index = len(children)
             children.append(_start_child("Celery worker", worker_args, env=env))
+            child_specs[index] = ("Celery worker", worker_args, env)
+
         if not no_beat:
+            index = len(children)
             children.append(_start_child("Celery Beat", beat_args, env=env))
+            child_specs[index] = ("Celery Beat", beat_args, env)
+
+        if child_specs:
+            monitor_thread = threading.Thread(
+                target=_monitor_children,
+                args=(children, child_specs, stop_event),
+                name="autoapply-child-monitor",
+                daemon=True,
+            )
+            monitor_thread.start()
 
         import uvicorn
 
@@ -432,6 +481,9 @@ def start_cmd(
             access_log=show_logs,
         )
     finally:
+        stop_event.set()
+        if monitor_thread is not None:
+            monitor_thread.join(timeout=5)
         _stop_children(children)
 
 
