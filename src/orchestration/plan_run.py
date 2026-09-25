@@ -46,6 +46,7 @@ from __future__ import annotations
 import functools
 import logging
 import uuid
+import requests
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -388,6 +389,17 @@ async def run_plan(
         except Exception as exc:  # noqa: BLE001 -- non-fatal; record + continue
             logger.exception("plan_run: review_queue insert failed")
             errors.append(f"review_queue: {type(exc).__name__}: {exc}")
+
+        requests.post(
+            "https://ntfy.sh/alex-jobs-pi3-9f82a1",
+            data="New job postings found, review them in AutoApply",
+            headers={
+                "Title": "AutoApply",
+                "Priority": "default",
+                "Tags": "gear,robot",
+                "Click": "shortcuts://run-shortcut?name=AutoApply"
+            }
+        )
 
         for breakdown in selected:
             job_id = getattr(breakdown, "job_id", None)
