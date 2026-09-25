@@ -390,16 +390,20 @@ async def run_plan(
             logger.exception("plan_run: review_queue insert failed")
             errors.append(f"review_queue: {type(exc).__name__}: {exc}")
 
-        requests.post(
-            "https://ntfy.sh/alex-jobs-pi3-9f82a1",
-            data="New job postings found, review them in AutoApply",
-            headers={
-                "Title": "AutoApply",
-                "Priority": "default",
-                "Tags": "gear,robot",
-                "Click": "shortcuts://run-shortcut?name=AutoApply"
-            }
-        )
+        if selected:
+            try:
+                requests.post(
+                    "https://ntfy.sh/alex-jobs-pi3-9f82a1",
+                    data="Click to review them in AutoApply!",
+                    headers={
+                        "Title": "AutoApply Found New Jobs!",
+                        "Priority": "default",
+                        "Tags": "gear,robot",
+                        "Click": "shortcuts://run-shortcut?name=AutoApply"
+                    }
+                )
+            except Exception as exc:
+                logger.warning("Failed to send ntfy alert: %s", exc)
 
         for breakdown in selected:
             job_id = getattr(breakdown, "job_id", None)
