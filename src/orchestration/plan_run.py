@@ -53,9 +53,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from src.intake.filters import load_filter_profiles
+from src.core.config import PROJECT_ROOT
 
 logger = logging.getLogger(__name__)
 
+NOTIFICATION_PATH = PROJECT_ROOT / "config" / "settings.yaml"
 
 # Where the Phase 17.7 kill switch lives. A tenant-aware version would
 # nest by tenant; we keep one global sentinel for now since multi-
@@ -392,16 +394,21 @@ async def run_plan(
 
         if selected:
             try:
-                requests.post(
-                    "https://ntfy.sh/alex-jobs-pi3-9f82a1",
-                    data="Click to review them in AutoApply!",
-                    headers={
-                        "Title": "AutoApply Found New Jobs!",
-                        "Priority": "default",
-                        "Tags": "gear,robot",
-                        "Click": "shortcuts://run-shortcut?name=AutoApply"
-                    }
-                )
+                if NOTIFICATION_PATH.exists():
+                    with open(NOTIFICATION_PATH, encoding="utf-8") as handle:
+                        data = yaml.safe_load(handle) or {}
+                    if isinstance(data, dict):
+                        ntfy_url = data.get("ntfy", "")
+                        requests.post(
+                        "https://ntfy.sh/%s" %ntfy_url,
+                        data="Click to review them in AutoApply!",
+                        headers={
+                            "Title": "AutoApply Found New Jobs!",
+                            "Priority": "default",
+                            "Tags": "gear,robot",
+                            "Click": "https://jobber.tail7de9f9.ts.net"
+                        }
+                    )
             except Exception as exc:
                 logger.warning("Failed to send ntfy alert: %s", exc)
 

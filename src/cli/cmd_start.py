@@ -342,7 +342,7 @@ def _monitor_children(
     callback=_validate_queues,
     help="Comma-separated Celery queues for the local worker.",
 )
-@click.option("--worker-concurrency", default=2, type=click.IntRange(min=1, max=64))
+@click.option("--worker-concurrency", default=1, type=click.IntRange(min=1, max=64))
 @click.option(
     "--worker-pool",
     default=_default_worker_pool(),
@@ -396,6 +396,8 @@ def start_cmd(
         str(worker_concurrency),
         "--pool",
         worker_pool,
+        "--max-tasks-per-child",
+        "10",
         "-l",
         loglevel,
     ]
@@ -479,6 +481,8 @@ def start_cmd(
             factory=True,
             log_level="info" if show_logs else "warning",
             access_log=show_logs,
+            limit_concurrency=10,
+            timeout_keep_alive=5,
         )
     finally:
         stop_event.set()
