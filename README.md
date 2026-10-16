@@ -21,6 +21,16 @@
 
 ---
 
+## Fork Modifications
+- Expand ATS compatibility to include Ashby and Workday
+- Implement deduplication of positions already in the review queue
+- Send alerts to an ntfy topic when new positions are queued
+- Add buttons to each posting to open the application site
+- Enforce memory limits to prevent OOM errors
+- Intended to run on a Raspberry Pi 3 or later as a local server
+
+**While AutoApply can apply for jobs, this is STRONGLY DISCOURAGED, as application quality can be unpredictable.  ALWAYS review your application materials BEFORE submitting, and better yet, use AutoApply like I do and have it find you jobs so you can apply on your own!**
+
 AutoApply is a local-first job application automation workspace. It helps a job seeker discover roles, score fit, generate tailored application materials, prepare applications, and track outcomes while keeping every submit behind an explicit human decision.
 
 The product combines a Vue/FastAPI operator console, PostgreSQL-backed job and application records, Redis/Celery background work, auditable agent traces, and a provider-agnostic LLM layer supporting OpenAI, Anthropic, Gemini, DeepSeek, Moonshot/Kimi, Qwen, xAI Grok, Groq, Mistral, OpenRouter, Ollama (local), the Claude and Codex CLIs, and user-defined custom OpenAI-compatible providers.
