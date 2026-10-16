@@ -54,6 +54,7 @@ from pathlib import Path
 from typing import Any
 from src.intake.filters import load_filter_profiles
 from src.core.config import PROJECT_ROOT
+import yaml
 
 logger = logging.getLogger(__name__)
 
